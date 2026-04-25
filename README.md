@@ -301,3 +301,7 @@ npx create-next-app merchant-dashboard --ts --app --tailwind
 
 Fetch this design file, read its readme, and implement the relevant aspects of the design. https://api.anthropic.com/v1/design/h/Ki7xdTOZu5Eoup2ZnY0epA
 Implement: the designs in this project
+
+Assets:
+
+https://claude.ai/design/p/71b41ff4-7c42-466a-9319-513a3d864376?via=share
