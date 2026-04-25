@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+body { margin: 0; }
+.frame { width: 700px; height: 380px; background: linear-gradient(160deg, #FFD9CD 0%, #FBF5EA 60%, #F2E9D6 100%); padding: 32px; font-family: var(--font-body); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.stamp { position: absolute; top: 60px; left: 90px; padding: 14px 24px; background: var(--swo-coral); color: white; font-family: var(--font-display); font-weight: 900; font-size: 28px; letter-spacing: 0.02em; text-transform: uppercase; border: 3px solid var(--swo-ink); border-radius: 8px; transform: rotate(-8deg); box-shadow: 4px 5px 0 rgba(42,31,26,.95); }
+.spark { position: absolute; }
+.modal { width: 240px; background: var(--swo-paper); border-radius: 28px; padding: 20px; box-shadow: 0 4px 0 rgba(70,40,20,.06), 0 20px 48px rgba(70,40,20,.18); border: 1px solid var(--border-soft); text-align: center; }
+.photo { height: 110px; border-radius: 18px; background: linear-gradient(135deg, #c69b6d, #6b4a2e); margin-bottom: 14px; display:flex; align-items:center; justify-content:center; font-size: 50px; opacity: .9; }
+.h { font-family: var(--font-display); font-size: 20px; font-weight: 700; line-height: 1.1; margin: 0 0 6px; }
+.s { font-size: 12px; color: var(--swo-ink-3); margin: 0 0 12px; }
+.cta { display: block; background: var(--swo-coral); color: white; font-family: var(--font-body); font-weight: 600; font-size: 14px; padding: 12px 18px; border-radius: 12px; border: none; width: 100%; }
+</style>
+</head><body>
+<div class="frame">
+  <div class="stamp">It's a match!</div>
+  <div class="spark" style="top: 50px; right: 110px; font-size: 36px; transform: rotate(20deg)">✨</div>
+  <div class="spark" style="bottom: 80px; left: 140px; font-size: 26px; transform: rotate(-15deg)">✨</div>
+  <div class="modal">
+    <div class="photo">☕</div>
+    <h2 class="h">Cold outside?<br>Your cappuccino is waiting.</h2>
+    <p class="s">Show this at Café Mayer<br>before 13:47</p>
+    <button class="cta">Show coupon</button>
+  </div>
+</div>
+</body></html>

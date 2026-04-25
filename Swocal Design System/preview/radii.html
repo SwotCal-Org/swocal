@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+body { margin: 0; }
+.frame { width: 700px; background: var(--swo-cream); padding: 32px; font-family: var(--font-body); }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.box { background: var(--swo-paper); border: 1px solid var(--border-soft); padding: 16px; display:flex; flex-direction:column; align-items:center; gap: 10px; box-shadow: var(--sh-1); }
+.demo { width: 78px; height: 78px; background: var(--swo-coral); border: 2px solid var(--swo-ink); }
+.tok { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); }
+.name { font-size: 13px; font-weight: 600; }
+</style>
+</head><body>
+<div class="frame">
+  <div class="grid">
+    <div class="box" style="border-radius:12px"><div class="demo" style="border-radius:4px"></div><div class="name">--r-1</div><div class="tok">4px · inputs detail</div></div>
+    <div class="box" style="border-radius:12px"><div class="demo" style="border-radius:8px"></div><div class="name">--r-2</div><div class="tok">8px</div></div>
+    <div class="box" style="border-radius:14px"><div class="demo" style="border-radius:12px"></div><div class="name">--r-3</div><div class="tok">12px · buttons</div></div>
+    <div class="box" style="border-radius:18px"><div class="demo" style="border-radius:18px"></div><div class="name">--r-4</div><div class="tok">18px · cards</div></div>
+    <div class="box" style="border-radius:18px"><div class="demo" style="border-radius:24px"></div><div class="name">--r-5</div><div class="tok">24px · swipe card</div></div>
+    <div class="box" style="border-radius:18px"><div class="demo" style="border-radius:32px"></div><div class="name">--r-6</div><div class="tok">32px · hero</div></div>
+    <div class="box" style="border-radius:18px"><div class="demo" style="border-radius:999px; height: 28px; width: 78px"></div><div class="name">--r-pill</div><div class="tok">chips, FABs</div></div>
+    <div class="box" style="border-radius:18px; opacity:.4"><div class="demo" style="border-radius:0"></div><div class="name">never 0</div><div class="tok">no square corners</div></div>
+  </div>
+</div>
+</body></html>
