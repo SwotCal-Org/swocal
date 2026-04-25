@@ -295,3 +295,9 @@ npx expo install react-native-deck-swiper react-native-qrcode-svg @supabase/supa
 # Merchant dashboard
 npx create-next-app merchant-dashboard --ts --app --tailwind
 ```
+
+
+### Design
+
+Fetch this design file, read its readme, and implement the relevant aspects of the design. https://api.anthropic.com/v1/design/h/Ki7xdTOZu5Eoup2ZnY0epA
+Implement: the designs in this project
