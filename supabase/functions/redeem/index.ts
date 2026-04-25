@@ -7,6 +7,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,20 +28,14 @@ Deno.serve(async (req) => {
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ valid: false, reason: "unauthenticated" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ valid: false, reason: "unauthenticated" }, 401);
     }
     const userId = userData.user.id;
 
     const body = await req.json().catch(() => ({}));
     const token = (body.token as string | undefined)?.trim();
     if (!token) {
-      return new Response(JSON.stringify({ valid: false, reason: "missing_token" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ valid: false, reason: "missing_token" }, 400);
     }
 
     const { data: offer, error: offerErr } = await supabase
@@ -46,32 +47,16 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (offerErr) throw offerErr;
-    if (!offer) {
-      return new Response(JSON.stringify({ valid: false, reason: "not_found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (offer.user_id !== userId) {
-      return new Response(JSON.stringify({ valid: false, reason: "wrong_user" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!offer) return json({ valid: false, reason: "not_found" }, 404);
+    if (offer.user_id !== userId) return json({ valid: false, reason: "wrong_user" }, 403);
     if (new Date(offer.expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ valid: false, reason: "expired" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ valid: false, reason: "expired" });
     }
     if (offer.status === "redeemed") {
-      return new Response(JSON.stringify({ valid: true, already_redeemed: true, offer }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ valid: true, already_redeemed: true, offer });
     }
     if (offer.status !== "active") {
-      return new Response(JSON.stringify({ valid: false, reason: offer.status }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ valid: false, reason: offer.status });
     }
 
     const { error: updErr } = await supabase
@@ -85,14 +70,12 @@ Deno.serve(async (req) => {
       .insert({ offer_id: offer.id, user_id: userId });
     if (redErr) throw redErr;
 
-    return new Response(JSON.stringify({ valid: true, already_redeemed: false, offer }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ valid: true, already_redeemed: false, offer });
   } catch (err) {
     console.error("redeem error:", err);
-    return new Response(JSON.stringify({ valid: false, reason: "server_error", message: String((err as Error).message ?? err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(
+      { valid: false, reason: "server_error", message: String((err as Error).message ?? err) },
+      500,
+    );
   }
 });

@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     const claude = apiKey ? new Anthropic({ apiKey }) : null;
 
-    const offers = await Promise.all(
+    const generations = await Promise.all(
       ranked.map(async ({ m }) => {
         const distanceM =
           m.lat != null && m.lng != null ? haversineMeters(STUTTGART.lat, STUTTGART.lng, m.lat, m.lng) : 200;
@@ -194,39 +194,44 @@ Deno.serve(async (req) => {
               return templateOffer(m, ctx, distanceM);
             })
           : templateOffer(m, ctx, distanceM);
+        return { m, distanceM, generated };
+      }),
+    );
 
-        const { data: row, error: insErr } = await supabase
-          .from("generated_offers")
-          .insert({
-            merchant_id: m.id,
-            user_id: userId,
-            headline: generated.headline,
-            subline: generated.subline,
-            discount_percent: generated.discount_percent,
-            context_signals: ctx,
-          })
-          .select("id, token, expires_at")
-          .single();
-        if (insErr) throw insErr;
-
-        return {
-          id: row.id,
-          token: row.token,
-          expires_at: row.expires_at,
+    const { data: rows, error: insErr } = await supabase
+      .from("generated_offers")
+      .insert(
+        generations.map(({ m, generated }) => ({
+          merchant_id: m.id,
+          user_id: userId,
           headline: generated.headline,
           subline: generated.subline,
           discount_percent: generated.discount_percent,
-          merchant: {
-            id: m.id,
-            name: m.name,
-            category: m.category,
-            image_url: m.image_url,
-            distance_m: distanceM,
-          },
-          source: claude ? "claude" : "template",
-        };
-      }),
-    );
+          context_signals: ctx,
+        })),
+      )
+      .select("id, token, expires_at");
+    if (insErr) throw insErr;
+    if (!rows || rows.length !== generations.length) {
+      throw new Error("insert returned wrong row count");
+    }
+
+    const offers = generations.map(({ m, distanceM, generated }, i) => ({
+      id: rows[i].id,
+      token: rows[i].token,
+      expires_at: rows[i].expires_at,
+      headline: generated.headline,
+      subline: generated.subline,
+      discount_percent: generated.discount_percent,
+      merchant: {
+        id: m.id,
+        name: m.name,
+        category: m.category,
+        image_url: m.image_url,
+        distance_m: distanceM,
+      },
+      source: claude ? "claude" : "template",
+    }));
 
     return new Response(JSON.stringify({ offers }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

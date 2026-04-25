@@ -13,9 +13,14 @@ export type ContextResponse = {
   location: { city: string; lat: number; lng: number };
 };
 
+export type Mood = 'warm_comfort' | 'sweet_treat' | 'social' | 'quick_bite';
+export type Budget = 'low' | 'mid' | 'high';
+export type SwipeDirection = 'left' | 'right';
+export type OfferStatus = 'active' | 'redeemed' | 'expired';
+
 export type IntentVector = {
-  mood?: 'warm_comfort' | 'sweet_treat' | 'social' | 'quick_bite' | string;
-  budget?: 'low' | 'mid' | 'high' | string;
+  mood?: Mood;
+  budget?: Budget;
 };
 
 export type GeneratedOffer = {
@@ -39,6 +44,14 @@ export type GenerateOffersResponse = {
   offers: GeneratedOffer[];
 };
 
+export type RedeemFailReason =
+  | 'unauthenticated'
+  | 'missing_token'
+  | 'not_found'
+  | 'wrong_user'
+  | 'expired'
+  | 'server_error';
+
 export type RedeemResponse =
   | {
       valid: true;
@@ -53,6 +66,6 @@ export type RedeemResponse =
     }
   | {
       valid: false;
-      reason: 'unauthenticated' | 'missing_token' | 'not_found' | 'wrong_user' | 'expired' | 'server_error' | string;
+      reason: RedeemFailReason;
       message?: string;
     };

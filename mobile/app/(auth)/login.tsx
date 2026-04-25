@@ -52,8 +52,8 @@ export default function LoginScreen() {
               placeholder="••••••••"
               value={password}
               onChangeText={setPassword}
-              error={error}
             />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
             <Button title="Sign in" onPress={onSubmit} loading={submitting} />
           </View>
 
@@ -80,4 +80,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { color: Brand.textMuted, fontSize: 14 },
   footerLink: { color: Brand.primary, fontSize: 14, fontWeight: '600' },
+  error: { color: Brand.danger, fontSize: 13 },
 });

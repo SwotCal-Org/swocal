@@ -78,8 +78,8 @@ export default function SignupScreen() {
               placeholder="Re-enter password"
               value={confirm}
               onChangeText={setConfirm}
-              error={error}
             />
+            {error ? <Text style={styles.error}>{error}</Text> : null}
             {info ? <Text style={styles.info}>{info}</Text> : null}
             <Button title="Create account" onPress={onSubmit} loading={submitting} />
           </View>
@@ -108,4 +108,5 @@ const styles = StyleSheet.create({
   footerText: { color: Brand.textMuted, fontSize: 14 },
   footerLink: { color: Brand.primary, fontSize: 14, fontWeight: '600' },
   info: { color: Brand.success, fontSize: 13 },
+  error: { color: Brand.danger, fontSize: 13 },
 });

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
-import type { ContextResponse, GenerateOffersResponse, IntentVector } from '@/types/api';
+import type { ContextResponse, GenerateOffersResponse, IntentVector, SwipeDirection } from '@/types/api';
 
 export async function generateOffers(
   intent: IntentVector,
@@ -13,10 +13,10 @@ export async function generateOffers(
   return data;
 }
 
-export async function recordSwipe(offerId: string, direction: 'left' | 'right') {
+export async function recordSwipe(args: { offerId: string; direction: SwipeDirection; userId: string }) {
   const { error } = await supabase
     .from('swipes')
-    .insert({ offer_id: offerId, direction, user_id: (await supabase.auth.getUser()).data.user?.id });
+    .insert({ offer_id: args.offerId, direction: args.direction, user_id: args.userId });
   if (error) throw error;
 }
 
