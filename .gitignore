@@ -1,0 +1,14 @@
+# env
+.env
+.env.local
+.env.*.local
+
+# os
+.DS_Store
+
+# editor
+.idea/
+.vscode/
+
+# misc
+*.log
