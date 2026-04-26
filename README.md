@@ -1,4 +1,7 @@
-# Swocal —- Swipe Local
+<img width="128" height="128" alt="app-icon" src="https://github.com/user-attachments/assets/77f3ee97-cf16-4660-b316-cd859da6d0b8" />
+
+
+# Swocal — Swipe Local
 
 > *Mia is cold, hungry, and has 12 minutes. She opens Swocal. The app already knows it's 11°C and overcast. It knows the café 80m away hasn't had a customer in 90 minutes. It generates — right now, just for her — "Cold outside? Your oat flat white is waiting. 15% off, next 2 hours only." She swipes right. The café fills a quiet slot. Everyone wins.*
 
