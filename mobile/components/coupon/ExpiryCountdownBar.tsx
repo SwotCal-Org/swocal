@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Radius, Spacing, Swo, Type } from '@/constants/Colors';
+import { useCouponPalette } from '@/lib/coupon-merchant-theme';
 
 type Variant = 'morning' | 'noon' | 'golden' | 'dusk';
 
@@ -9,6 +10,16 @@ const VARIANT: Record<Variant, { track: string; fill: string; left: string; righ
   noon: { track: 'rgba(50,40,0,0.2)', fill: Swo.ink, left: Swo.mustardDeep, right: Swo.ink2 },
   golden: { track: Swo.borderSoft, fill: Swo.sky, left: Swo.ink2, right: Swo.ink },
   dusk: { track: Swo.ink3, fill: Swo.coralDeep, left: Swo.ink4, right: Swo.paper },
+};
+
+const Mocha = '#7A4D32';
+const MochaSoft = '#D4B5A0';
+const Terr = '#9B5A3D';
+const V_COFFEE: Record<Variant, { track: string; fill: string; left: string; right: string }> = {
+  morning: { track: 'rgba(90,60,45,0.16)', fill: Terr, left: Swo.ink2, right: Swo.ink },
+  noon: { track: 'rgba(60,40,30,0.25)', fill: Mocha, left: MochaSoft, right: Swo.ink2 },
+  golden: { track: 'rgba(200, 190, 180, 0.6)', fill: Mocha, left: Swo.ink2, right: Swo.ink },
+  dusk: { track: Swo.ink3, fill: Terr, left: Swo.ink4, right: Swo.paper },
 };
 
 const DEFAULT_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -75,6 +86,7 @@ type Props = {
 /** Live countdown + progress bar: time remaining in the offer window (created_at → expires_at). */
 export function ExpiryCountdownBar({ expiresAt, createdAt, status, hint, variant }: Props) {
   const [, setTick] = useState(0);
+  const palette = useCouponPalette();
 
   useEffect(() => {
     if (!expiresAt) return undefined;
@@ -87,7 +99,7 @@ export function ExpiryCountdownBar({ expiresAt, createdAt, status, hint, variant
 
   if (!expiresAt) return null;
 
-  const colors = VARIANT[variant];
+  const colors = palette === 'coffee' ? V_COFFEE[variant] : VARIANT[variant];
   const snap = computeSnapshot(expiresAt, createdAt, status);
 
   return (

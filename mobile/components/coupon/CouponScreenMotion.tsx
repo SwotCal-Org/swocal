@@ -16,12 +16,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { SwoDuration, SwoEasing, SwoEnter } from '@/constants/Motion';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
-import {
-  cityWeatherLine,
-  dayTypeChip,
-  formatTemp,
-  personalHeroMessage,
-} from '@/lib/coupon-personalization';
+import { dayTypeChip, formatTemp, heroWeatherMoodLine, personalHeroMessage } from '@/lib/coupon-personalization';
+import { heroPillHighlight, useCouponPalette } from '@/lib/coupon-merchant-theme';
 import { weatherIcon } from '@/lib/coupon-weather-icon';
 import type { ContextResponse } from '@/types/api';
 
@@ -40,6 +36,8 @@ type Props = {
 
 /** City · temp · day-type pills + animated live weather. */
 export function WeatherPillsRow({ ctx, dark }: { ctx: ContextResponse; dark?: boolean }) {
+  const palette = useCouponPalette();
+  const hot = heroPillHighlight(palette);
   return (
     <Animated.View
       entering={FadeInRight.duration(SwoDuration.slow).delay(100).easing(SwoEasing.snap)}
@@ -48,7 +46,7 @@ export function WeatherPillsRow({ ctx, dark }: { ctx: ContextResponse; dark?: bo
       <View style={[wp.pill, dark && wp.pillDark]}>
         <Text style={[wp.pillText, dark && wp.pillTextDark]}>📍 {ctx.location.city}</Text>
       </View>
-      <View style={[wp.pill, dark && wp.pillDark, wp.pillHighlight]}>
+      <View style={[wp.pill, dark && wp.pillDark, wp.pillHighlight, hot]}>
         <Text style={[wp.pillText, dark && wp.pillTextDark]}>🌡 {formatTemp(ctx)}</Text>
       </View>
       <View style={[wp.pill, dark && wp.pillDark]}>
@@ -59,7 +57,14 @@ export function WeatherPillsRow({ ctx, dark }: { ctx: ContextResponse; dark?: bo
 }
 
 const wp = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.s2, marginTop: Spacing.s2 },
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.s2,
+    marginTop: Spacing.s2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   pill: {
     paddingHorizontal: Spacing.s3,
     paddingVertical: 6,
@@ -68,13 +73,15 @@ const wp = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Swo.ink,
     ...Shadow.stickerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pillDark: {
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderColor: Swo.ink3,
   },
   pillHighlight: { backgroundColor: Swo.mustardSoft },
-  pillText: { fontFamily: Type.bodySemi, fontSize: 12, color: Swo.ink },
+  pillText: { fontFamily: Type.bodySemi, fontSize: 12, color: Swo.ink, textAlign: 'center' },
   pillTextDark: { color: Swo.paper },
 });
 
@@ -113,7 +120,7 @@ export function PersonalizedPlayfulHero({ ctx, userName, offer, dark, delayBase 
             {ctx.location.city}
           </Text>
           <Text style={[ph.subline, dark && ph.mutedOnDark]} numberOfLines={2}>
-            {cityWeatherLine(ctx)}
+            {heroWeatherMoodLine(ctx)}
           </Text>
         </View>
         <Animated.View style={[ph.iconBox, floatStyle, dark && ph.iconBoxDark]}>
