@@ -13,7 +13,7 @@ const dayHoursSchema = z
 const weatherEnum = z.enum(['clear', 'clouds', 'rain', 'snow', 'thunderstorm', 'mist', 'drizzle']);
 const timeOfDayEnum = z.enum(['morning', 'lunch', 'afternoon', 'evening']);
 
-export const couponRulesSchema = z.object({
+const couponRulesSchema = z.object({
   prompt: z.string().max(2000).optional(),
   monthly_cap: z.number().int().min(0).max(2000).optional(),
   weather_required: z.array(weatherEnum).optional(),
