@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+body { margin: 0; }
+.frame { width: 700px; background: var(--swo-cream); padding: 28px; font-family: var(--font-body); display: flex; flex-direction: column; gap: 18px; }
+.input { background: var(--swo-paper); border: 1.5px solid var(--swo-ink-4); border-radius: 12px; padding: 14px 16px; font-family: var(--font-body); font-size: 16px; color: var(--swo-ink); width: 100%; box-sizing: border-box; }
+.input.focus { border: 2px solid var(--swo-coral); padding: 13.5px 15.5px; outline: 3px solid rgba(255,106,77,0.25); outline-offset: 0; }
+.input.error { border: 1.5px solid var(--swo-danger); }
+.lbl { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tile { background: var(--swo-paper); border: 2px solid var(--swo-ink-4); border-radius: 18px; padding: 18px; text-align: center; cursor: pointer; }
+.tile.on { background: var(--swo-coral-soft); border-color: var(--swo-coral); }
+.tile-emoji { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+.tile-name { font-weight: 600; font-size: 14px; }
+</style>
+</head><body>
+<div class="frame">
+  <div>
+    <div class="lbl">Default</div>
+    <input class="input" value="Café Mayer" />
+  </div>
+  <div>
+    <div class="lbl">Focus</div>
+    <input class="input focus" value="oat flat white" />
+  </div>
+  <div>
+    <div class="lbl">Pref tiles · selectable</div>
+    <div class="row">
+      <div class="tile on"><div class="tile-emoji">☕</div><div class="tile-name">Coffee</div></div>
+      <div class="tile"><div class="tile-emoji">🥐</div><div class="tile-name">Local food</div></div>
+    </div>
+  </div>
+</div>
+</body></html>

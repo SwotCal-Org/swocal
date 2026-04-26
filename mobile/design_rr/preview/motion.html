@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+body { margin: 0; }
+.frame { width: 700px; background: var(--swo-cream); padding: 32px; font-family: var(--font-body); }
+.row { display: grid; grid-template-columns: 130px 1fr 1fr; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border-soft); align-items: center; }
+.row:last-child { border-bottom: 0; }
+.tok { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+.curve { width: 100%; height: 36px; }
+.use { font-size: 12px; color: var(--fg-3); }
+@keyframes bouncy { 0%,100% { transform: translateX(0) } 50% { transform: translateX(36px) } }
+@keyframes snap   { 0%,100% { transform: translateX(0) } 50% { transform: translateX(36px) } }
+.dot { width: 18px; height: 18px; border-radius: 50%; background: var(--swo-coral); }
+</style>
+</head><body>
+<div class="frame">
+  <div class="row">
+    <div><div class="tok">--ease-bounce</div><div class="use">default · 220ms</div></div>
+    <svg class="curve" viewBox="0 0 100 36"><path d="M0 30 C 34 -6, 64 50, 100 6" fill="none" stroke="#FF6A4D" stroke-width="2"/></svg>
+    <div class="dot" style="animation: bouncy 1.4s infinite cubic-bezier(0.34, 1.56, 0.64, 1)"></div>
+  </div>
+  <div class="row">
+    <div><div class="tok">--ease-snap</div><div class="use">sheets · 220ms</div></div>
+    <svg class="curve" viewBox="0 0 100 36"><path d="M0 30 C 20 6, 80 6, 100 6" fill="none" stroke="#5C4A3F" stroke-width="2"/></svg>
+    <div class="dot" style="background: var(--swo-mint); animation: snap 1.4s infinite cubic-bezier(0.2, 0.8, 0.2, 1)"></div>
+  </div>
+  <div class="row">
+    <div><div class="tok">durations</div><div class="use">140 / 220 / 420 / 600ms</div></div>
+    <div style="display:flex; gap:6px; align-items:center"><span style="height:6px; width:14px; background:#FF6A4D; border-radius:3px"></span><span style="height:6px; width:22px; background:#FF6A4D; border-radius:3px"></span><span style="height:6px; width:42px; background:#FF6A4D; border-radius:3px"></span><span style="height:6px; width:60px; background:#FF6A4D; border-radius:3px"></span></div>
+    <div class="use">fast · base · slow · swipe</div>
+  </div>
+  <div class="row">
+    <div><div class="tok">interaction</div><div class="use">hover / press</div></div>
+    <div style="display:flex; gap:8px"><span style="background:#FF6A4D; color:white; padding:8px 14px; border-radius:12px; font-weight:600; font-size:13px; transform:scale(1.02); box-shadow: 0 4px 14px rgba(70,40,20,.10)">hover ↑1.02</span><span style="background:#E04A2E; color:white; padding:8px 14px; border-radius:12px; font-weight:600; font-size:13px; transform:scale(0.96); box-shadow: 0 1px 0 rgba(70,40,20,.05)">press ↓0.96</span></div>
+    <div class="use">scale, never color flips</div>
+  </div>
+</div>
+</body></html>

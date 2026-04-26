@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#FF6A4D"></rect>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="none" stroke="#2A1F1A" stroke-width="3"></rect>
+  <text x="64" y="84" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="900" font-size="72" fill="#FBF5EA" letter-spacing="-0.04em">s</text>
+  <circle cx="92" cy="78" r="6" fill="#F5B945" stroke="#2A1F1A" stroke-width="2"></circle>
+</svg>

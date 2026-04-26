@@ -1,60 +1,77 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps } from 'react-native';
-import { Brand } from '@/constants/Colors';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type PressableProps } from 'react-native';
+import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
 
-type Variant = 'primary' | 'secondary' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'coral';
+type Size = 'md' | 'lg';
 
 type Props = Omit<PressableProps, 'style'> & {
   title: string;
   variant?: Variant;
+  size?: Size;
   loading?: boolean;
+  fullWidth?: boolean;
 };
 
-export function Button({ title, variant = 'primary', loading, disabled, ...rest }: Props) {
+export function Button({ title, variant = 'primary', size = 'lg', loading, disabled, fullWidth = true, ...rest }: Props) {
   const isDisabled = disabled || loading;
+  const v = variantStyles[variant];
   return (
-    <Pressable
-      {...rest}
-      disabled={isDisabled}
-      style={({ pressed }) => [
-        styles.base,
-        variantStyles[variant].container,
-        pressed && !isDisabled && styles.pressed,
-        isDisabled && styles.disabled,
-      ]}
-    >
-      {loading ? (
-        <ActivityIndicator color={variantStyles[variant].text.color} />
-      ) : (
-        <Text style={[styles.text, variantStyles[variant].text]}>{title}</Text>
-      )}
-    </Pressable>
+    <View style={[fullWidth && { width: '100%' }, isDisabled && styles.disabled]}>
+      <Pressable
+        {...rest}
+        disabled={isDisabled}
+        style={({ pressed }) => [
+          styles.base,
+          size === 'md' && styles.md,
+          v.container,
+          variant !== 'ghost' && Shadow.s1,
+          pressed && !isDisabled && styles.pressed,
+        ]}
+      >
+        {loading ? (
+          <ActivityIndicator color={v.text.color} />
+        ) : (
+          <Text style={[styles.text, v.text]}>{title}</Text>
+        )}
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    height: 52,
-    borderRadius: 14,
+    minHeight: 54,
+    borderRadius: Radius.r3,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing.s5,
+    paddingVertical: Spacing.s3,
   },
-  text: { fontSize: 16, fontWeight: '600', letterSpacing: 0.2 },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.5 },
+  md: { minHeight: 44, paddingHorizontal: Spacing.s4 },
+  text: {
+    fontSize: 16,
+    fontFamily: Type.bodySemi,
+    letterSpacing: 0.1,
+  },
+  pressed: { transform: [{ scale: 0.97 }] },
+  disabled: { opacity: 0.45 },
 });
 
 const variantStyles = {
   primary: {
-    container: { backgroundColor: Brand.primary },
-    text: { color: '#FFFFFF' },
+    container: { backgroundColor: Swo.mustard, borderWidth: 2, borderColor: Swo.ink },
+    text: { color: Swo.ink },
+  },
+  coral: {
+    container: { backgroundColor: Swo.coral, borderWidth: 2, borderColor: Swo.ink },
+    text: { color: Swo.paper },
   },
   secondary: {
-    container: { backgroundColor: Brand.surface, borderWidth: 1, borderColor: Brand.border },
-    text: { color: Brand.text },
+    container: { backgroundColor: Swo.paper, borderWidth: 1, borderColor: Swo.borderSoft },
+    text: { color: Swo.ink },
   },
   ghost: {
     container: { backgroundColor: 'transparent' },
-    text: { color: Brand.primary },
+    text: { color: Swo.coralDeep },
   },
 } as const;

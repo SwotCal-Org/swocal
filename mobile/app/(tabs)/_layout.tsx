@@ -1,14 +1,24 @@
 import { Tabs } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Platform, StyleSheet } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { HapticTab } from '@/components/haptic-tab';
-import { Brand } from '@/constants/Colors';
+import { Spacing, Swo, Type } from '@/constants/Colors';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Brand.primary,
-        tabBarInactiveTintColor: Brand.textMuted,
+        tabBarActiveTintColor: Swo.coralDeep,
+        tabBarInactiveTintColor: Swo.ink3,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontFamily: Type.bodySemi,
+          fontSize: 11,
+          letterSpacing: 0.4,
+          marginTop: 2,
+        },
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: { paddingTop: 6 },
         headerShown: false,
         tabBarButton: HapticTab,
       }}
@@ -17,23 +27,40 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Swipe',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="house.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'flame' : 'flame-outline'} size={24} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="coupons"
         options={{
           title: 'Coupons',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'pricetag' : 'pricetag-outline'} size={24} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="chevron.right" color={color} />,
+          title: 'You',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={26} color={color} />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: Swo.paper,
+    borderTopWidth: 1,
+    borderTopColor: Swo.borderSoft,
+    height: Platform.select({ ios: 84, default: 68 }),
+    paddingBottom: Platform.select({ ios: 24, default: Spacing.s2 }),
+    paddingTop: Spacing.s1,
+  },
+});

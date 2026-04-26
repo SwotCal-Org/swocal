@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="../colors_and_type.css">
+<style>
+body { margin: 0; }
+.frame { width: 700px; background: var(--swo-cream); padding: 28px; font-family: var(--font-body); display:flex; gap: 24px; align-items: flex-start; }
+.card { width: 300px; background: var(--swo-paper); border-radius: 24px; border: 1px solid var(--border-soft); box-shadow: 0 2px 0 rgba(70,40,20,.06), 0 12px 28px rgba(70,40,20,.14); overflow: hidden; }
+.photo { height: 200px; background: linear-gradient(135deg, #c69b6d 0%, #6b4a2e 100%); position: relative; }
+.photo::after { content: '☕'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 90px; opacity: .3; }
+.cardbody { padding: 16px 20px 20px; }
+.chips { display: flex; gap: 6px; margin-bottom: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 2px solid var(--swo-ink); background: var(--swo-mustard); color: var(--swo-ink); box-shadow: 2px 3px 0 rgba(42,31,26,.18); }
+.chip.coral { background: var(--swo-coral); color: white; }
+.chip.plain { background: var(--swo-cream-deep); border-color: transparent; box-shadow: none; font-weight: 600; }
+.headline { font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1.05; letter-spacing: -0.01em; margin: 0 0 8px; color: var(--swo-ink); }
+.sub { font-size: 13px; color: var(--swo-ink-2); margin: 0 0 14px; }
+.merch { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--swo-ink-3); border-top: 1px solid var(--border-soft); padding-top: 12px; }
+.notes { font-size: 12px; color: var(--fg-3); line-height: 1.5; max-width: 320px; }
+.notes b { color: var(--fg); }
+</style>
+</head><body>
+<div class="frame">
+  <div class="card">
+    <div class="photo"></div>
+    <div class="cardbody">
+      <div class="chips">
+        <span class="chip coral">15% off</span>
+        <span class="chip">⏱ 2h</span>
+        <span class="chip plain">200m</span>
+      </div>
+      <h2 class="headline">Cold outside? Your cappuccino is waiting.</h2>
+      <p class="sub">Generated for ☁️ 11°C · Quiet afternoon</p>
+      <div class="merch">📍 Café Mayer · Marktplatz 4</div>
+    </div>
+  </div>
+  <div class="notes">
+    <p><b>The canonical Swocal card.</b></p>
+    <p>Photo fills 60% of card. Sticker chips top-left, headline in Fraunces, subline reveals the why, merchant + address pinned at bottom.</p>
+    <p style="font-family: var(--font-mono); font-size: 11px; margin-top: 10px">w 300 · radius --r-5 · sh-3 · padding --s-5/--s-4</p>
+  </div>
+</div>
+</body></html>
