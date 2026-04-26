@@ -8,6 +8,12 @@ export type Profile = {
   intent_vector: Record<string, unknown>;
 };
 
+/** True when the user has saved preferences (consumer onboarding in Swipe). */
+export function isProfileOnboarded(intentVector: unknown): boolean {
+  if (!intentVector || typeof intentVector !== 'object' || Array.isArray(intentVector)) return false;
+  return Object.keys(intentVector as Record<string, unknown>).length > 0;
+}
+
 // Fetch the current user's profile row. Returns null if signed-out.
 export async function getMyProfile(): Promise<Profile | null> {
   const { data: userData } = await supabase.auth.getUser();

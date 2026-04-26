@@ -23,9 +23,19 @@ export async function recordSwipe(args: { offerId: string; direction: SwipeDirec
 export async function listMyOffers() {
   const { data, error } = await supabase
     .from('generated_offers')
-    .select('id, token, headline, subline, discount_percent, status, expires_at, merchant:merchants ( id, name, category, image_url )')
+    .select('id, token, headline, subline, discount_percent, status, expires_at, created_at, merchant:merchants ( id, name, category, image_url )')
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) throw error;
   return data ?? [];
+}
+
+export async function getOffer(id: string) {
+  const { data, error } = await supabase
+    .from('generated_offers')
+    .select('id, token, headline, subline, discount_percent, status, expires_at, created_at, merchant:merchants ( id, name, category, image_url )')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
 }

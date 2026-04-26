@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
@@ -18,6 +18,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Location from 'expo-location';
 
 import { SwocalCard, type Offer } from '@/components/swocal-card';
+import {
+  makeRedemptionToken,
+  MatchAfterSwipeOverlay,
+  SwipeCouponScreen,
+} from '@/components/swipe/match-coupon-overlays';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
@@ -264,6 +269,8 @@ export default function SwipeScreen() {
   const [selectedBudget, setSelectedBudget] = useState<string>('€€');
   const [firstName, setFirstName] = useState('there');
   const [selectedPlace, setSelectedPlace] = useState<Offer | null>(null);
+  const [matchOffer, setMatchOffer] = useState<Offer | null>(null);
+  const [couponSession, setCouponSession] = useState<{ offer: Offer; token: string } | null>(null);
 
   const stepAnim = useSharedValue(1);
   const introAnim = useSharedValue(0);
@@ -448,7 +455,7 @@ export default function SwipeScreen() {
 
   useEffect(() => {
     // Apply on this screen and parent navigator to avoid tab bar bleed-through.
-    const hideTabBar = onboardingOpen || !!selectedPlace;
+    const hideTabBar = onboardingOpen || !!selectedPlace || !!matchOffer || !!couponSession;
     navigation.setOptions({
       tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
     });
@@ -462,22 +469,24 @@ export default function SwipeScreen() {
       navigation.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
       parent?.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
     };
-  }, [navigation, onboardingOpen, selectedPlace]);
+  }, [navigation, onboardingOpen, selectedPlace, matchOffer, couponSession]);
 
-  useFocusEffect(() => {
-    const hideTabBar = onboardingOpen || !!selectedPlace;
-    navigation.setOptions({
-      tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
-    });
-    const parent = navigation.getParent();
-    parent?.setOptions({
-      tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
-    });
-    return () => {
-      navigation.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
-      parent?.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
-    };
-  });
+  useFocusEffect(
+    useCallback(() => {
+      const hideTabBar = onboardingOpen || !!selectedPlace || !!matchOffer || !!couponSession;
+      navigation.setOptions({
+        tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
+      });
+      const parent = navigation.getParent();
+      parent?.setOptions({
+        tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
+      });
+      return () => {
+        navigation.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
+        parent?.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
+      };
+    }, [navigation, onboardingOpen, selectedPlace, matchOffer, couponSession])
+  );
 
   const onboardingScreens = useMemo(
     () => [
@@ -569,6 +578,13 @@ export default function SwipeScreen() {
           console.warn('Failed to store swipe:', error.message);
         }
       });
+  }
+
+  function onDeckSwipe(direction: 'left' | 'right', offer: Offer) {
+    recordSwipe(direction, offer);
+    if (direction === 'right') {
+      setMatchOffer(offer);
+    }
   }
 
   if (onboardingOpen) {
@@ -787,7 +803,7 @@ export default function SwipeScreen() {
           <SwipeStack
             offers={offers}
             onOpenPlace={(offer) => setSelectedPlace(offer)}
-            onSwipe={recordSwipe}
+            onSwipe={onDeckSwipe}
           />
         ) : (
           <View style={screenStyles.deckState}>
@@ -871,6 +887,25 @@ export default function SwipeScreen() {
         </View>
       )}
 
+      {matchOffer && !couponSession && (
+        <MatchAfterSwipeOverlay
+          offer={matchOffer}
+          onShowCoupon={() => {
+            setCouponSession({ offer: matchOffer, token: makeRedemptionToken(matchOffer) });
+            setMatchOffer(null);
+          }}
+          onKeepSwiping={() => setMatchOffer(null)}
+        />
+      )}
+
+      {couponSession && (
+        <SwipeCouponScreen
+          offer={couponSession.offer}
+          token={couponSession.token}
+          contextLine={`${weatherLabel} · ${locationLabel} · matched to your area`}
+          onBack={() => setCouponSession(null)}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -971,6 +1006,8 @@ function toOffer(store: NearbyStore, userLat: number, userLng: number): Offer | 
   }
   if (distanceM == null) return null;
   const emoji = categoryEmoji(store.category);
+  const idHash = store.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const discount = 8 + (idHash % 12);
   return {
     id: store.id,
     category: store.category,
@@ -986,7 +1023,7 @@ function toOffer(store: NearbyStore, userLat: number, userLng: number): Offer | 
     rating: Number.isFinite(store.rating) ? Number(store.rating) : undefined,
     reviewCount: Number.isFinite(store.review_count) ? Number(store.review_count) : undefined,
     timeLeft: timeLeftByDistance(distanceM),
-    discount: 0,
+    discount,
     photoBg: photoBgByCategory(store.category),
     photoEmoji: emoji,
   };
