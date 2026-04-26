@@ -33,6 +33,7 @@ Goal:
 Rules:
 - Pick exactly one skin from: morning, noon, golden, dusk.
 - If debug_skin is provided, skin must equal debug_skin.
+- Match the merchant category in tone: coffee shops / cafés / espresso / roaster → warm, earthy language; the app also applies a brown color theme for these categories.
 - Align tone with local context (weather, time_of_day, day_type) and merchant category.
 - label is a short upper section tag (2-3 words).
 - context_note is one vivid sentence (max 120 chars), never generic.

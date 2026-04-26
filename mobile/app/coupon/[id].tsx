@@ -17,11 +17,21 @@ import {
 } from '@/components/coupon/CouponScreenMotion';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
 import {
-  formatTemp,
   mergeContextNoteForDisplay,
   personalMotivation,
   personalOfferLine,
 } from '@/lib/coupon-personalization';
+import {
+  activityIndicatorColor,
+  atmosphereForPalette,
+  CouponThemeProvider,
+  couponPaletteForOffer,
+  duskSkinColors,
+  goldenSkinColors,
+  morningSkinColors,
+  noonSkinColors,
+  useCouponPalette,
+} from '@/lib/coupon-merchant-theme';
 import { fetchContext } from '@/services/context';
 import { generateCouponUi, type CouponUiSpec } from '@/services/coupon-ui';
 import { getSeedDemoOfferById } from '@/dev/seed-demo-coupons';
@@ -100,6 +110,15 @@ function deriveSkin(ctx: ContextResponse): Skin {
   return 'dusk';
 }
 
+/** Coffee/café offers use time-consistent skin + brown palette; other merchants keep AI / default skin. */
+function resolveCouponSkin(offer: OfferDetail, ctx: ContextResponse, ui: CouponUiSpec, forced: Skin | null): Skin {
+  if (forced) return forced;
+  if (couponPaletteForOffer(offer) === 'coffee') {
+    return deriveSkin(ctx);
+  }
+  return ui.skin ?? deriveSkin(ctx);
+}
+
 function contextNote(ctx: ContextResponse, override?: string): string {
   if (override?.trim()) return override;
   const { time_of_day, day_type, weather } = ctx;
@@ -152,6 +171,8 @@ function buildDefaultUi(ctx: ContextResponse, forcedSkin?: Skin): CouponUiSpec {
 }
 
 function Atmosphere({ ctx, dark }: { ctx: ContextResponse; dark?: boolean }) {
+  const palette = useCouponPalette();
+  const at = atmosphereForPalette(palette, !!dark);
   const drift = useRef(new RNAnimated.Value(0)).current;
   const pulse = useRef(new RNAnimated.Value(0.35)).current;
 
@@ -179,8 +200,17 @@ function Atmosphere({ ctx, dark }: { ctx: ContextResponse; dark?: boolean }) {
   const weather = ctx.weather.condition.toLowerCase();
   const rainy = weather.includes('rain') || weather.includes('drizzle') || weather.includes('storm');
   const cloudy = weather.includes('cloud') || weather.includes('mist') || weather.includes('fog');
-  const weatherTint = rainy ? 'rgba(120,164,196,0.22)' : cloudy ? 'rgba(172,179,194,0.2)' : 'rgba(255,196,100,0.18)';
-  const skyline = dark ? 'rgba(255,255,255,0.35)' : 'rgba(42,31,26,0.25)';
+  const sunnyBase = at.sunnyTint;
+  const weatherTint = rainy
+    ? palette === 'coffee'
+      ? 'rgba(130, 150, 175, 0.2)'
+      : 'rgba(120,164,196,0.22)'
+    : cloudy
+      ? palette === 'coffee'
+        ? 'rgba(150, 145, 140, 0.22)'
+        : 'rgba(172,179,194,0.2)'
+    : sunnyBase;
+  const skyline = at.skyline;
   const seed = citySeed(ctx.location.city || 'Stuttgart');
 
   const cityDrift = {
@@ -199,9 +229,9 @@ function Atmosphere({ ctx, dark }: { ctx: ContextResponse; dark?: boolean }) {
             const x = i * 30 + ((seed + i * 7) % 8);
             return <Rect key={i} x={x} y={120 - h} width={w} height={h} rx="2" fill={skyline} />;
           })}
-          <Circle cx={300} cy={38} r={20} fill={dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,196,100,0.35)'} />
+          <Circle cx={300} cy={38} r={20} fill={at.sun} />
         </Svg>
-        <View style={[fx.cityMask, dark ? { backgroundColor: Swo.ink } : { backgroundColor: Swo.cream }]} />
+        <View style={[fx.cityMask, { backgroundColor: at.cityMask }]} />
       </RNAnimated.View>
     </View>
   );
@@ -291,22 +321,23 @@ const ov = StyleSheet.create({
 // ─── Morning skin — newspaper / morning receipt ────────────────────────────────
 
 function MorningSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: ContextResponse; ui: CouponUiSpec; userName: string }) {
+  const t = morningSkinColors(useCouponPalette());
   const redeemed = offer.status === 'redeemed';
   const contextLine = mergeContextNoteForDisplay(ctx, ui, contextNote(ctx, ui.context_note));
   return (
-    <SafeAreaView style={[sk.safe, { backgroundColor: Swo.creamDeep }]}>
+    <SafeAreaView style={[sk.safe, { backgroundColor: t.safeBg }]}>
       <Atmosphere ctx={ctx} />
       <ScrollView contentContainerStyle={sk.scroll} showsVerticalScrollIndicator={false}>
-        <BackButton tint={Swo.mustardSoft} />
+        <BackButton tint={t.backTint} />
         <PersonalizedPlayfulHero ctx={ctx} userName={userName} offer={offer} />
 
         <StaggerIn baseDelay={120} step={60}>
           <View style={ms.header}>
-            <Text style={ms.eyebrow}>{skinLabel(ctx, ui.label)}</Text>
+            <Text style={[ms.eyebrow, { color: t.eyebrow }]}>{skinLabel(ctx, ui.label)}</Text>
             <Text style={ms.merchant}>{offer.merchant?.name ?? '—'}</Text>
             <Text style={ms.note}>{contextLine}</Text>
             <Text style={ms.motivation}>{personalMotivation(ctx)}</Text>
-            <Text style={ms.personalLine}>{personalOfferLine(offer, ctx, ui)}</Text>
+            <Text style={[ms.personalLine, { color: t.personalLine }]}>{personalOfferLine(offer, ctx, ui)}</Text>
           </View>
         </StaggerIn>
 
@@ -315,7 +346,7 @@ function MorningSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: Co
         </Reanimated.View>
 
         <View style={ms.qrSection}>
-          <Text style={ms.handNote}>scan at the counter in {ctx.location.city} ↓</Text>
+          <Text style={[ms.handNote, { color: t.handNote }]}>scan at the counter in {ctx.location.city} ↓</Text>
           <View style={[ms.qrWrap, redeemed && { opacity: 0.35 }]}>
             <AnimatedQrReveal delay={120}>
               <QRFrame token={offer.token ?? offer.id} bg={Swo.paper} fg={Swo.ink} />
@@ -326,6 +357,7 @@ function MorningSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: Co
             <Chip
               label={`${offer.discount_percent ?? 0}% off in ${ctx.location.city}`}
               variant="mustard"
+              style={t.chip}
             />
           </Reanimated.View>
           {offer.expires_at && (
@@ -429,43 +461,44 @@ const ms = StyleSheet.create({
 // ─── Noon skin — bold diner poster ────────────────────────────────────────────
 
 function NoonSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: ContextResponse; ui: CouponUiSpec; userName: string }) {
+  const t = noonSkinColors(useCouponPalette());
   const redeemed = offer.status === 'redeemed';
   const contextLine = mergeContextNoteForDisplay(ctx, ui, contextNote(ctx, ui.context_note));
   return (
-    <SafeAreaView style={[sk.safe, { backgroundColor: Swo.paper }]}>
+    <SafeAreaView style={[sk.safe, { backgroundColor: t.paperBg }]}>
       <Atmosphere ctx={ctx} />
       <View style={{ paddingHorizontal: Spacing.s6, paddingTop: Spacing.s3 }}>
         <PersonalizedPlayfulHero ctx={ctx} userName={userName} offer={offer} />
       </View>
       <Reanimated.View entering={SwoEnter.down(60)}>
-        <View style={ns.hero}>
+        <View style={[ns.hero, { backgroundColor: t.hero }]}>
           <View style={ns.heroInner}>
-            <BackButton tint={Swo.mustard} />
-            <Text style={ns.heroLabel}>{skinLabel(ctx, ui.label).toUpperCase()} · {ctx.location.city}</Text>
+            <BackButton tint={t.back} />
+            <Text style={[ns.heroLabel, { color: t.heroLabel }]}>{skinLabel(ctx, ui.label).toUpperCase()} · {ctx.location.city}</Text>
             <Text style={ns.heroMerchant}>{offer.merchant?.name ?? '—'}</Text>
             <Text style={ns.heroDiscount}>{offer.discount_percent ?? 0}%</Text>
             <Text style={ns.heroOff}>OFF</Text>
-            <Text style={ns.localHint}>{formatTemp(ctx)} {ctx.weather.condition} · {ctx.location.city}</Text>
+            <Text style={[ns.localHint, { color: t.localHint }]}>{ctx.weather.condition} · {ctx.location.city}</Text>
           </View>
         </View>
       </Reanimated.View>
 
       <Reanimated.View entering={SwoEnter.fade()}>
-        <View style={ns.dottedEdge}>
+        <View style={[ns.dottedEdge, { backgroundColor: t.paperBg }]}>
           {Array.from({ length: 14 }).map((_, i) => (
-            <View key={i} style={ns.dot} />
+            <View key={i} style={[ns.dot, { backgroundColor: t.dot }]} />
           ))}
         </View>
       </Reanimated.View>
 
       <ScrollView contentContainerStyle={[sk.scroll, ns.body]} showsVerticalScrollIndicator={false}>
-        <Text style={ns.note}>{contextLine}</Text>
+        <Text style={[ns.note, { color: t.handNote }]}>{contextLine}</Text>
         <Text style={ns.motivation}>{personalMotivation(ctx)}</Text>
         <Text style={ns.offerHint}>{personalOfferLine(offer, ctx, ui)}</Text>
 
         <View style={[ns.qrWrap, redeemed && { opacity: 0.35 }]}>
           <AnimatedQrReveal delay={0}>
-            <QRFrame token={offer.token ?? offer.id} bg={Swo.paper} fg={Swo.ink} />
+            <QRFrame token={offer.token ?? offer.id} bg={t.paperBg} fg={Swo.ink} />
           </AnimatedQrReveal>
           {redeemed && <RedeemedOverlay />}
         </View>
@@ -600,25 +633,26 @@ const ns = StyleSheet.create({
 // ─── Golden skin — afternoon editorial ────────────────────────────────────────
 
 function GoldenSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: ContextResponse; ui: CouponUiSpec; userName: string }) {
+  const t = goldenSkinColors(useCouponPalette());
   const redeemed = offer.status === 'redeemed';
   const contextLine = mergeContextNoteForDisplay(ctx, ui, contextNote(ctx, ui.context_note));
   return (
-    <SafeAreaView style={[sk.safe, { backgroundColor: Swo.cream }]}>
+    <SafeAreaView style={[sk.safe, { backgroundColor: t.safeBg }]}>
       <Atmosphere ctx={ctx} />
-      <Reanimated.View entering={SwoEnter.right()} style={gs.accentBar} />
+      <Reanimated.View entering={SwoEnter.right()} style={[gs.accentBar, { backgroundColor: t.bar }]} />
       <ScrollView contentContainerStyle={sk.scroll} showsVerticalScrollIndicator={false}>
-        <BackButton tint={Swo.skySoft} />
+        <BackButton tint={t.backTint} />
         <PersonalizedPlayfulHero ctx={ctx} userName={userName} offer={offer} />
 
         <StaggerIn baseDelay={60} step={55}>
           <View style={gs.header}>
-            <Text style={gs.eyebrow}>
+            <Text style={[gs.eyebrow, { color: t.eyebrow }]}>
               {skinLabel(ctx, ui.label)} · {ctx.location.city}
             </Text>
             <Text style={gs.note}>{contextLine}</Text>
             <Text style={gs.motivation}>{personalMotivation(ctx)}</Text>
-            <Text style={gs.momentWeather}>
-              {formatTemp(ctx)} · {ctx.weather.condition} · {ctx.location.city}
+            <Text style={[gs.momentWeather, { color: t.momentWeather }]}>
+              {ctx.weather.condition} · {ctx.location.city}
             </Text>
             <Text style={gs.momentSub} numberOfLines={2}>
               {personalOfferLine(offer, ctx, ui)}
@@ -636,7 +670,7 @@ function GoldenSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: Con
 
           <View style={gs.copyCol}>
             <Text style={gs.discountBig}>{offer.discount_percent ?? 0}%</Text>
-            <Text style={gs.discountLabel}>OFF</Text>
+            <Text style={[gs.discountLabel, { color: t.discountLabel }]}>OFF</Text>
             <View style={gs.divider} />
             <Text style={gs.merchant}>{offer.merchant?.name ?? '—'}</Text>
             {offer.merchant?.category && <Text style={gs.category}>{offer.merchant.category}</Text>}
@@ -758,20 +792,21 @@ const gs = StyleSheet.create({
 // ─── Dusk skin — dark / evening luxe ──────────────────────────────────────────
 
 function DuskSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: ContextResponse; ui: CouponUiSpec; userName: string }) {
+  const t = duskSkinColors(useCouponPalette());
   const redeemed = offer.status === 'redeemed';
   const contextLine = mergeContextNoteForDisplay(ctx, ui, contextNote(ctx, ui.context_note));
   return (
     <SafeAreaView style={[sk.safe, { backgroundColor: Swo.ink }]}>
       <Atmosphere ctx={ctx} dark />
       <ScrollView contentContainerStyle={sk.scroll} showsVerticalScrollIndicator={false}>
-        <BackButton tint={Swo.ink2} iconColor={Swo.paper} />
+        <BackButton tint={t.backTint} iconColor={Swo.paper} />
         <PersonalizedPlayfulHero ctx={ctx} userName={userName} offer={offer} dark />
 
         <StaggerIn baseDelay={50} step={50}>
-          <Text style={ds.stars}>✦  ✦  ✦</Text>
+          <Text style={[ds.stars, { color: t.stars }]}>✦  ✦  ✦</Text>
           <View style={ds.header}>
-            <Text style={ds.eyebrow}>
-              {skinLabel(ctx, ui.label)} · {ctx.location.city} · {formatTemp(ctx)}
+            <Text style={[ds.eyebrow, { color: t.eyebrow }]}>
+              {skinLabel(ctx, ui.label)} · {ctx.location.city}
             </Text>
             <Text style={ds.merchant}>{offer.merchant?.name ?? '—'}</Text>
             <Text style={ds.note}>{contextLine}</Text>
@@ -788,7 +823,7 @@ function DuskSkin({ offer, ctx, ui, userName }: { offer: OfferDetail; ctx: Conte
         </Reanimated.View>
 
         <Reanimated.View entering={SwoEnter.fade(100)} style={ds.badge}>
-          <Text style={ds.badgeNum}>{offer.discount_percent ?? 0}%</Text>
+          <Text style={[ds.badgeNum, { color: t.badgeNum }]}>{offer.discount_percent ?? 0}%</Text>
           <Text style={ds.badgeLabel}>
             {ctx.time_of_day === 'evening' ? 'off this evening' : 'off'} · {ctx.location.city}
           </Text>
@@ -1096,13 +1131,18 @@ export default function CouponScreen() {
 
   const isTestUser = isDebugUser(user?.email);
   const forcedSkin = isTestUser && VALID_SKINS.includes(debugSkin as Skin) ? (debugSkin as Skin) : null;
-  const skin = forcedSkin ?? ui.skin ?? deriveSkin(ctx);
+  const skin = resolveCouponSkin(offer, ctx, ui, forcedSkin);
   const name = userHandle(user?.email);
+  const palette = couponPaletteForOffer(offer);
 
-  if (skin === 'morning') return <MorningSkin offer={offer} ctx={ctx} ui={ui} userName={name} />;
-  if (skin === 'noon') return <NoonSkin offer={offer} ctx={ctx} ui={ui} userName={name} />;
-  if (skin === 'golden') return <GoldenSkin offer={offer} ctx={ctx} ui={ui} userName={name} />;
-  return <DuskSkin offer={offer} ctx={ctx} ui={ui} userName={name} />;
+  return (
+    <CouponThemeProvider value={palette}>
+      {skin === 'morning' && <MorningSkin offer={offer} ctx={ctx} ui={ui} userName={name} />}
+      {skin === 'noon' && <NoonSkin offer={offer} ctx={ctx} ui={ui} userName={name} />}
+      {skin === 'golden' && <GoldenSkin offer={offer} ctx={ctx} ui={ui} userName={name} />}
+      {skin === 'dusk' && <DuskSkin offer={offer} ctx={ctx} ui={ui} userName={name} />}
+    </CouponThemeProvider>
+  );
 }
 
 const root = StyleSheet.create({

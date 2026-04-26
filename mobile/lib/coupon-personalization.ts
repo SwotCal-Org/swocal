@@ -27,6 +27,11 @@ export function cityWeatherLine(ctx: ContextResponse): string {
   return `${ctx.location.city} · ${formatTemp(ctx)} · ${humanizeCondition(ctx.weather.condition)}`;
 }
 
+/** Under hero city title: human weather mood only (city/temp are in the pills row). */
+export function heroWeatherMoodLine(ctx: ContextResponse): string {
+  return humanizeCondition(ctx.weather.condition);
+}
+
 export function timeOfDayPhrase(ctx: ContextResponse): string {
   switch (ctx.time_of_day) {
     case 'morning':
