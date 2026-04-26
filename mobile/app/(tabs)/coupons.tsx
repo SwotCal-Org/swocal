@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Modal,
-  Platform,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,655 +8,278 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/ui/Chip';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
+import { SEED_DEMO_IDS, SEED_DEMO_OFFERS } from '@/dev/seed-demo-coupons';
+import { getMyProfile, isProfileOnboarded } from '@/services/profile';
+import { listMyOffers } from '@/services/offers';
+import { useAuth } from '@/providers/AuthProvider';
 
-type Coupon = {
-  headline: string;
-  discount: number;
-  expires: string;
-  status: 'active' | 'redeemed';
-};
+type Offer = Awaited<ReturnType<typeof listMyOffers>>[number];
+const TEST_EMAIL = 'bkrinahmed007@gmail.com';
 
-type Place = {
-  id: string;
-  name: string;
-  address: string;
-  rating: number;
-  reviewCount: number;
-  category: string;
-  categoryEmoji: string;
-  photoBg: string;
-  photoEmoji: string;
-  distanceM: number;
-  lat: number;
-  lng: number;
-  coupon?: Coupon;
-};
+function isDebugUser(email: string | null | undefined): boolean {
+  return (email ?? '').trim().toLowerCase() === TEST_EMAIL;
+}
 
-// Stuttgart coordinates around Marktplatz / Schillerplatz.
-const PLACES: Place[] = [
-  {
-    id: '1',
-    name: 'Café Mayer',
-    address: 'Marktplatz 4, Stuttgart',
-    rating: 4.8,
-    reviewCount: 312,
-    category: 'Coffee',
-    categoryEmoji: '☕',
-    photoBg: Swo.coralSoft,
-    photoEmoji: '☕',
-    distanceM: 200,
-    lat: 48.7765,
-    lng: 9.1773,
-    coupon: {
-      headline: 'Oat flat white, on the house',
-      discount: 100,
-      expires: 'Today, 13:47',
-      status: 'active',
+function createDebugCoupon(): Offer {
+  return {
+    id: 'debug',
+    token: 'DEBUG-TOKEN',
+    headline: 'Debug preview offer',
+    subline: 'Use this coupon to test all skins.',
+    discount_percent: 25,
+    status: 'active',
+    created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    merchant: {
+      id: 'debug-merchant',
+      name: 'Swocal Test Merchant',
+      category: 'Cafe',
+      image_url: null,
     },
-  },
-  {
-    id: '2',
-    name: 'Bäckerei Anna',
-    address: 'Königstraße 18, Stuttgart',
-    rating: 4.6,
-    reviewCount: 198,
-    category: 'Bakery',
-    categoryEmoji: '🥐',
-    photoBg: Swo.mustardSoft,
-    photoEmoji: '🥐',
-    distanceM: 90,
-    lat: 48.7787,
-    lng: 9.1795,
-    coupon: {
-      headline: 'Two croissants for one',
-      discount: 50,
-      expires: 'Today, 11:30',
-      status: 'active',
-    },
-  },
-  {
-    id: '3',
-    name: 'Konditorei Nest',
-    address: 'Schillerplatz 3, Stuttgart',
-    rating: 4.7,
-    reviewCount: 156,
-    category: 'Cake',
-    categoryEmoji: '🍰',
-    photoBg: Swo.mintSoft,
-    photoEmoji: '🍰',
-    distanceM: 850,
-    lat: 48.7758,
-    lng: 9.1820,
-    coupon: {
-      headline: 'Slice of cherry tart',
-      discount: 30,
-      expires: 'Yesterday',
-      status: 'redeemed',
-    },
-  },
-  // Non-coupon places — show as regular shop cards on tap.
-  {
-    id: '4',
-    name: 'Weinstube Klink',
-    address: 'Bohnenviertel 12, Stuttgart',
-    rating: 4.5,
-    reviewCount: 87,
-    category: 'Wine bar',
-    categoryEmoji: '🍷',
-    photoBg: Swo.plumSoft,
-    photoEmoji: '🍷',
-    distanceM: 340,
-    lat: 48.7741,
-    lng: 9.1812,
-  },
-  {
-    id: '5',
-    name: 'Eisdiele Sole',
-    address: 'Marienstraße 8, Stuttgart',
-    rating: 4.9,
-    reviewCount: 421,
-    category: 'Gelato',
-    categoryEmoji: '🍨',
-    photoBg: Swo.skySoft,
-    photoEmoji: '🍨',
-    distanceM: 410,
-    lat: 48.7728,
-    lng: 9.1769,
-  },
-];
+  };
+}
 
-const STUTTGART_REGION = {
-  latitude: 48.7770,
-  longitude: 9.1795,
-  latitudeDelta: 0.012,
-  longitudeDelta: 0.012,
-};
+function getEmoji(category: string | undefined): string {
+  if (!category) return '🏪';
+  const lower = category.toLowerCase();
+  const map: [string, string][] = [
+    ['cafe', '☕'], ['coffee', '☕'], ['bakery', '🥐'], ['pastry', '🥐'],
+    ['dessert', '🍰'], ['sweet', '🍰'], ['bar', '🍺'], ['pizza', '🍕'],
+    ['burger', '🍔'], ['sushi', '🍱'], ['ice', '🍦'], ['restaurant', '🍽️'],
+  ];
+  return map.find(([k]) => lower.includes(k))?.[1] ?? '🏪';
+}
 
-// Cream-tinted Google Maps style (Android). Apple Maps on iOS uses mutedStandard.
-const SWOCAL_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: Swo.cream }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: Swo.ink2 }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: Swo.cream }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: Swo.mintSoft }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: Swo.mintDeep }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: Swo.paper }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: Swo.ink3 }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: Swo.creamDeep }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: Swo.mustardSoft }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: Swo.mustard }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: Swo.skySoft }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: Swo.sky }] },
-];
+function getBg(category: string | undefined): string {
+  if (!category) return Swo.skySoft;
+  const lower = category.toLowerCase();
+  if (lower.includes('cafe') || lower.includes('coffee')) return Swo.coralSoft;
+  if (lower.includes('bakery') || lower.includes('pastry')) return Swo.mustardSoft;
+  if (lower.includes('dessert') || lower.includes('sweet')) return Swo.mintSoft;
+  return Swo.skySoft;
+}
 
-const CREAM_CLEAR = 'rgba(251, 245, 234, 0)';
-
-type PermStatus = 'unknown' | 'granted' | 'denied';
+function formatExpiry(expiresAt: string | null): string {
+  if (!expiresAt) return '';
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 'Expired';
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m left`;
+}
 
 export default function CouponsScreen() {
   const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const isWide = width >= 600;
+  const router = useRouter();
 
-  const [view, setView] = useState<'list' | 'map'>('list');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [permission, setPermission] = useState<PermStatus>('unknown');
-  const [permissionModalOpen, setPermissionModalOpen] = useState(false);
-  const mapRef = useRef<MapView>(null);
+  const { user } = useAuth();
+  const isTestUser = isDebugUser(user?.email);
+  const showDebugSkins = isTestUser;
 
-  const couponPlaces = PLACES.filter((p) => p.coupon);
-  const active = couponPlaces.filter((p) => p.coupon!.status === 'active');
-  const past = couponPlaces.filter((p) => p.coupon!.status === 'redeemed');
-  const selected = selectedId ? PLACES.find((p) => p.id === selectedId) ?? null : null;
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // When user switches to the map, check permission and recenter (or prompt).
   useEffect(() => {
-    if (view !== 'map') return;
-    let cancelled = false;
-    (async () => {
-      const current = await Location.getForegroundPermissionsAsync();
-      if (cancelled) return;
-      if (current.status === 'granted') {
-        setPermission('granted');
-        recenterToUser();
-      } else {
-        setPermission(current.status === 'denied' ? 'denied' : 'unknown');
-        setPermissionModalOpen(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
-
-  async function recenterToUser() {
-    try {
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      mapRef.current?.animateCamera(
-        {
-          center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
-          zoom: 16,
-          pitch: 0,
-          heading: 0,
-        },
-        { duration: 700 }
-      );
-    } catch {
-      // Silently ignore — user keeps the default Stuttgart view.
+    if (!user?.id) {
+      setOffers([]);
+      setLoading(false);
+      return;
     }
-  }
+    setLoading(true);
+    const debugUser = isDebugUser(user?.email);
+    Promise.all([listMyOffers(), getMyProfile()])
+      .then(([rows, profile]) => {
+        const onboarded = isProfileOnboarded(profile?.intent_vector);
+        if (onboarded) {
+          const seed = SEED_DEMO_OFFERS as unknown as Offer[];
+          const rest = rows.filter((r) => !SEED_DEMO_IDS.has(r.id));
+          setOffers([...seed, ...rest]);
+        } else if (debugUser && rows.length === 0) {
+          setOffers([createDebugCoupon()]);
+        } else {
+          setOffers(rows);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user?.id, user?.email]);
 
-  async function requestPermission() {
-    const res = await Location.requestForegroundPermissionsAsync();
-    if (res.status === 'granted') {
-      setPermission('granted');
-      setPermissionModalOpen(false);
-      recenterToUser();
-    } else {
-      setPermission('denied');
-    }
-  }
-
-  function handleLocatePress() {
-    if (permission === 'granted') {
-      recenterToUser();
-    } else {
-      setPermissionModalOpen(true);
-    }
-  }
+  const active = offers.filter(o => o.status === 'active');
+  const past = offers.filter(o => o.status === 'redeemed');
 
   return (
-    <View style={styles.root}>
-      {view === 'map' && (
-        <View style={StyleSheet.absoluteFill}>
-          <CouponMap
-            mapRef={mapRef}
-            places={PLACES}
-            selectedId={selectedId}
-            onSelectPlace={setSelectedId}
-            showsUserDot={permission === 'granted'}
-          />
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ScrollView contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}>
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Your coupons</Text>
+          <Text style={styles.title}>Saved for the right moment</Text>
         </View>
-      )}
 
-      {/* Top chrome — solid cream behind notch/header/segment, then a soft fade. */}
-      <View style={styles.chromeWrap} pointerEvents="box-none">
-        <View style={[styles.chromeSolid, { paddingTop: insets.top }]}>
-          <View style={[styles.chromeInner, isWide && styles.chromeWide]}>
-            <View style={styles.header}>
-              <Text style={styles.eyebrow}>Your coupons</Text>
-              <Text style={styles.title}>Saved for the right moment</Text>
-            </View>
-            <View style={styles.segment}>
-              <SegmentBtn label="List" active={view === 'list'} onPress={() => setView('list')} />
-              <SegmentBtn label="Map" active={view === 'map'} onPress={() => setView('map')} />
-            </View>
-          </View>
-        </View>
-        <LinearGradient
-          colors={[Swo.cream, CREAM_CLEAR]}
-          style={styles.chromeFade}
-          pointerEvents="none"
-        />
-      </View>
-
-      {view === 'list' && (
-        <ScrollView
-          style={styles.listScroll}
-          contentContainerStyle={[
-            styles.listContent,
-            isWide && styles.listContentWide,
-            { paddingBottom: tabBarHeight + Spacing.s6 },
-          ]}
-        >
-          <Text style={styles.section}>Ready to redeem · {active.length}</Text>
-          <View style={styles.list}>
-            {active.length === 0 ? (
-              <EmptyState />
-            ) : (
-              active.map((p) => <CouponRow key={p.id} place={p} />)
-            )}
-          </View>
-
-          {past.length > 0 && (
-            <>
-              <Text style={[styles.section, styles.sectionMt]}>Used</Text>
-              <View style={styles.list}>
-                {past.map((p) => (
-                  <CouponRow key={p.id} place={p} />
-                ))}
-              </View>
-            </>
-          )}
-        </ScrollView>
-      )}
-
-      {/* Map overlays — recenter button + selected place card. */}
-      {view === 'map' && (
-        <>
-          {/* Cream-tinted strip covering the Apple Maps logo at bottom-left.
-              MapKit doesn't expose a prop to hide it, so we mask it. */}
-          {Platform.OS === 'ios' && (
-            <View
-              pointerEvents="none"
-              style={[styles.appleLogoCover, { bottom: tabBarHeight }]}
-            />
-          )}
-
-          <Pressable
-            onPress={handleLocatePress}
-            accessibilityRole="button"
-            accessibilityLabel="Center on my location"
-            style={({ pressed }) => [
-              styles.locateBtn,
-              {
-                bottom: Math.max(insets.bottom, Spacing.s3),
-                right: Spacing.s5,
-              },
-              pressed && { transform: [{ scale: 0.94 }] },
-            ]}
-          >
-            <Text style={styles.locateBtnIcon}>📍</Text>
-          </Pressable>
-
-          {selected && (
-            <View
-              style={[
-                styles.placeCardWrap,
-                { bottom: tabBarHeight + Spacing.s4 },
-                isWide && styles.placeCardWide,
-              ]}
-            >
-              {selected.coupon ? (
-                <CouponPlaceCard place={selected} onClose={() => setSelectedId(null)} />
+        {loading ? (
+          <ActivityIndicator color={Swo.mustard} style={{ marginTop: Spacing.s8 }} />
+        ) : (
+          <>
+            <Text style={styles.section}>Ready to redeem · {active.length}</Text>
+            <View style={styles.list}>
+              {active.length === 0 ? (
+                <EmptyState />
               ) : (
-                <ShopPlaceCard place={selected} onClose={() => setSelectedId(null)} />
+                active.map(o => (
+                  <CouponRow
+                    key={o.id}
+                    offer={o}
+                    onPress={() =>
+                      router.push(o.id === 'debug' ? '/coupon/debug?debugSkin=morning' : `/coupon/${o.id}`)
+                    }
+                  />
+                ))
               )}
             </View>
-          )}
-        </>
-      )}
 
-      <LocationPermissionModal
-        visible={permissionModalOpen}
-        denied={permission === 'denied'}
-        onAllow={requestPermission}
-        onClose={() => setPermissionModalOpen(false)}
-      />
-    </View>
+            {past.length > 0 && (
+              <>
+                <Text style={[styles.section, styles.sectionMt]}>Used</Text>
+                <View style={styles.list}>
+                  {past.map(o => (
+                    <CouponRow
+                      key={o.id}
+                      offer={o}
+                      onPress={() =>
+                        router.push(o.id === 'debug' ? '/coupon/debug?debugSkin=morning' : `/coupon/${o.id}`)
+                      }
+                    />
+                  ))}
+                </View>
+              </>
+            )}
+
+            {showDebugSkins && (
+              <DebugSection
+                onNavigate={(skin) => router.push(`/coupon/debug?debugSkin=${skin}`)}
+              />
+            )}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// ─── Segmented control ───────────────────────────────────────────────────────
+function CouponRow({ offer, onPress }: { offer: Offer; onPress: () => void }) {
+  const redeemed = offer.status === 'redeemed';
+  const merchant = Array.isArray(offer.merchant) ? offer.merchant[0] : offer.merchant;
+  const emoji = getEmoji(merchant?.category ?? undefined);
+  const bg = getBg(merchant?.category ?? undefined);
 
-function SegmentBtn({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      style={({ pressed }) => [
-        styles.segmentBtn,
-        active && styles.segmentBtnActive,
-        pressed && !active && { opacity: 0.7 },
-      ]}
+      style={({ pressed }) => [styles.card, redeemed && styles.cardRedeemed, pressed && styles.cardPressed]}
     >
-      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-// ─── Map ─────────────────────────────────────────────────────────────────────
-
-function CouponMap({
-  mapRef,
-  places,
-  selectedId,
-  onSelectPlace,
-  showsUserDot,
-}: {
-  mapRef: React.RefObject<MapView | null>;
-  places: Place[];
-  selectedId: string | null;
-  onSelectPlace: (id: string | null) => void;
-  showsUserDot: boolean;
-}) {
-  if (Platform.OS === 'web') {
-    return (
-      <View style={[StyleSheet.absoluteFill, styles.mapWebFallback]}>
-        <Text style={styles.mapEmoji}>🗺️</Text>
-        <Text style={styles.mapTitle}>Map preview is mobile-only</Text>
-        <Text style={styles.mapBody}>Open on iOS or Android to see the map.</Text>
-      </View>
-    );
-  }
-
-  return (
-    <MapView
-      ref={mapRef}
-      style={StyleSheet.absoluteFill}
-      provider={PROVIDER_DEFAULT}
-      initialRegion={STUTTGART_REGION}
-      userInterfaceStyle="light"
-      mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
-      customMapStyle={SWOCAL_MAP_STYLE}
-      legalLabelInsets={{ bottom: -100, right: -100, top: 0, left: 0 }}
-      showsUserLocation={showsUserDot}
-      showsMyLocationButton={false}
-      showsCompass={false}
-      showsPointsOfInterest={false}
-      showsBuildings={false}
-      showsTraffic={false}
-      showsIndoors={false}
-      toolbarEnabled={false}
-      pitchEnabled={false}
-      rotateEnabled={false}
-      onPress={() => onSelectPlace(null)}
-      camera={{
-        center: { latitude: STUTTGART_REGION.latitude, longitude: STUTTGART_REGION.longitude },
-        pitch: 0,
-        heading: 0,
-        zoom: 15,
-        altitude: 2000,
-      }}
-    >
-      {places.map((p) => (
-        <Marker
-          key={p.id}
-          coordinate={{ latitude: p.lat, longitude: p.lng }}
-          anchor={{ x: 0.5, y: 1 }}
-          tracksViewChanges={selectedId === p.id}
-          onPress={(e) => {
-            e.stopPropagation();
-            onSelectPlace(p.id);
-          }}
-        >
-          <StickerPin
-            emoji={p.photoEmoji}
-            kind={p.coupon ? (p.coupon.status === 'redeemed' ? 'redeemed' : 'active') : 'plain'}
-            selected={selectedId === p.id}
-          />
-        </Marker>
-      ))}
-    </MapView>
-  );
-}
-
-function StickerPin({
-  emoji,
-  kind,
-  selected,
-}: {
-  emoji: string;
-  kind: 'active' | 'redeemed' | 'plain';
-  selected: boolean;
-}) {
-  const bubbleStyle =
-    kind === 'active'
-      ? styles.pinBubbleActive
-      : kind === 'redeemed'
-      ? styles.pinBubbleRedeemed
-      : styles.pinBubblePlain;
-  const tailColor =
-    kind === 'active' ? Swo.ink : kind === 'redeemed' ? Swo.ink3 : Swo.ink2;
-  return (
-    <View style={[styles.pinWrap, selected && styles.pinWrapSelected]}>
-      <View style={[styles.pinBubble, bubbleStyle]}>
-        <Text style={styles.pinEmoji}>{emoji}</Text>
-      </View>
-      <View style={[styles.pinTail, { borderTopColor: tailColor }]} />
-    </View>
-  );
-}
-
-// ─── Place cards (open on marker tap) ────────────────────────────────────────
-
-function CouponPlaceCard({ place, onClose }: { place: Place; onClose: () => void }) {
-  const c = place.coupon!;
-  const redeemed = c.status === 'redeemed';
-  return (
-    <View style={[styles.placeCard, styles.placeCardCoupon, redeemed && { opacity: 0.85 }]}>
-      <CardHeader place={place} onClose={onClose} />
-      <View style={styles.couponDivider} />
-      <View style={styles.couponMetaRow}>
-        <Chip
-          label={redeemed ? 'Redeemed' : `${c.discount}% off`}
-          variant={redeemed ? 'mint' : 'mustard'}
-        />
-        <Chip label={`⏱ ${c.expires}`} variant="soft" />
-      </View>
-      <Text style={styles.couponHeadline}>{c.headline}</Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={redeemed}
-        style={({ pressed }) => [
-          styles.primaryBtn,
-          redeemed && styles.primaryBtnDisabled,
-          pressed && !redeemed && { transform: [{ scale: 0.98 }] },
-        ]}
-      >
-        <Text style={styles.primaryBtnText}>
-          {redeemed ? 'Already used' : 'Redeem coupon'}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function ShopPlaceCard({ place, onClose }: { place: Place; onClose: () => void }) {
-  return (
-    <View style={styles.placeCard}>
-      <CardHeader place={place} onClose={onClose} />
-      <View style={styles.shopMetaRow}>
-        <Chip label={`${place.categoryEmoji}  ${place.category}`} variant="soft" />
-        <Chip label={`📍 ${place.distanceM}m`} variant="soft" />
-      </View>
-      <Pressable
-        accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.secondaryBtn,
-          pressed && { transform: [{ scale: 0.98 }] },
-        ]}
-      >
-        <Text style={styles.secondaryBtnText}>Get directions</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function CardHeader({ place, onClose }: { place: Place; onClose: () => void }) {
-  return (
-    <View style={styles.cardHeader}>
-      <View style={[styles.cardThumb, { backgroundColor: place.photoBg }]}>
-        <Text style={styles.cardThumbEmoji}>{place.photoEmoji}</Text>
-      </View>
-      <View style={styles.cardHeaderText}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {place.name}
-        </Text>
-        <Text style={styles.cardAddress} numberOfLines={1}>
-          {place.address}
-        </Text>
-        <View style={styles.ratingRow}>
-          <Text style={styles.ratingStar}>★</Text>
-          <Text style={styles.ratingValue}>{place.rating.toFixed(1)}</Text>
-          <Text style={styles.ratingCount}>({place.reviewCount})</Text>
-        </View>
-      </View>
-      <Pressable
-        onPress={onClose}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-        style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
-      >
-        <Text style={styles.closeBtnText}>✕</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-// ─── Location permission modal ───────────────────────────────────────────────
-
-function LocationPermissionModal({
-  visible,
-  denied,
-  onAllow,
-  onClose,
-}: {
-  visible: boolean;
-  denied: boolean;
-  onAllow: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.modalIconWrap}>
-            <Text style={styles.modalIconEmoji}>📍</Text>
-          </View>
-          <Text style={styles.modalTitle}>
-            {denied ? 'Location is off' : 'Find deals near you'}
-          </Text>
-          <Text style={styles.modalBody}>
-            {denied
-              ? 'Open Settings to allow location access — without it we can’t show how close each coupon is.'
-              : 'Allow location so we can show coupons and shops within walking distance, and center the map on you.'}
-          </Text>
-          <View style={styles.modalActions}>
-            <Pressable
-              onPress={onClose}
-              style={({ pressed }) => [styles.modalGhost, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={styles.modalGhostText}>Not now</Text>
-            </Pressable>
-            <Pressable
-              onPress={onAllow}
-              style={({ pressed }) => [
-                styles.modalPrimary,
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-            >
-              <Text style={styles.modalPrimaryText}>
-                {denied ? 'Try again' : 'Allow location'}
-              </Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-// ─── List view rows ──────────────────────────────────────────────────────────
-
-function CouponRow({ place }: { place: Place }) {
-  const c = place.coupon!;
-  const redeemed = c.status === 'redeemed';
-  return (
-    <View style={[styles.card, redeemed && styles.cardRedeemed]}>
-      <View style={[styles.thumb, { backgroundColor: place.photoBg }]}>
-        <Text style={styles.thumbEmoji}>{place.photoEmoji}</Text>
+      <View style={[styles.thumb, { backgroundColor: bg }]}>
+        <Text style={styles.thumbEmoji}>{emoji}</Text>
       </View>
       <View style={styles.cardBody}>
         <View style={styles.metaRow}>
           <Chip
-            label={redeemed ? 'Redeemed' : `${c.discount}% off`}
+            label={redeemed ? 'Redeemed' : `${offer.discount_percent ?? 0}% off`}
             variant={redeemed ? 'mint' : 'mustard'}
           />
-          <Chip label={`⏱ ${c.expires}`} variant="soft" />
-          <Chip label={`📍 ${place.distanceM}m`} variant="soft" />
+          {offer.expires_at && !redeemed && (
+            <Chip label={`Time ${formatExpiry(offer.expires_at)}`} variant="soft" />
+          )}
         </View>
         <Text style={styles.headline} numberOfLines={2}>
-          {c.headline}
+          {offer.headline ?? ''}
         </Text>
-        <Text style={styles.merchant}>{place.name}</Text>
+        <Text style={styles.merchant}>{merchant?.name ?? ''}</Text>
       </View>
+      {!redeemed && (
+        <View style={styles.arrow}>
+          <Text style={styles.arrowText}>›</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const DEBUG_SKINS = [
+  { key: 'morning', emoji: '🌅', label: 'Morning', sub: 'Warm parchment · newspaper' },
+  { key: 'noon',    emoji: '☀️', label: 'Noon',    sub: 'Bold mustard poster' },
+  { key: 'golden',  emoji: '🌇', label: 'Golden',  sub: 'Afternoon editorial' },
+  { key: 'dusk',    emoji: '🌙', label: 'Dusk',    sub: 'Dark luxe · evening' },
+] as const;
+
+function DebugSection({ onNavigate }: { onNavigate: (skin: string) => void }) {
+  return (
+    <View style={dbg.wrap}>
+      <View style={dbg.header}>
+        <Text style={dbg.eyebrow}>⚙ Debug</Text>
+        <Text style={dbg.title}>Preview all skins</Text>
+      </View>
+      {DEBUG_SKINS.map(s => (
+        <Pressable key={s.key} onPress={() => onNavigate(s.key)}
+          style={({ pressed }) => [dbg.row, pressed && dbg.rowPressed]}>
+          <Text style={dbg.rowEmoji}>{s.emoji}</Text>
+          <View style={dbg.rowText}>
+            <Text style={dbg.rowLabel}>{s.label}</Text>
+            <Text style={dbg.rowSub}>{s.sub}</Text>
+          </View>
+          <Text style={dbg.rowArrow}>›</Text>
+        </Pressable>
+      ))}
     </View>
   );
 }
+
+const dbg = StyleSheet.create({
+  wrap: {
+    marginTop: Spacing.s6,
+    borderWidth: 1,
+    borderColor: Swo.mustardDeep + '40',
+    borderRadius: Radius.r4,
+    overflow: 'hidden',
+  },
+  header: {
+    backgroundColor: Swo.mustardSoft,
+    paddingHorizontal: Spacing.s4,
+    paddingVertical: Spacing.s3,
+    gap: Spacing.s1,
+  },
+  eyebrow: {
+    fontFamily: Type.bodySemi,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: Swo.mustardDeep,
+  },
+  title: {
+    fontFamily: Type.displaySemi,
+    fontSize: 16,
+    color: Swo.ink,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.s4,
+    paddingVertical: Spacing.s3,
+    backgroundColor: Swo.paper,
+    borderTopWidth: 1,
+    borderTopColor: Swo.borderSoft,
+    gap: Spacing.s3,
+  },
+  rowPressed: { backgroundColor: Swo.creamDeep },
+  rowEmoji: { fontSize: 24, width: 32, textAlign: 'center' },
+  rowText: { flex: 1, gap: 2 },
+  rowLabel: { fontFamily: Type.bodyMedium, fontSize: 15, color: Swo.ink },
+  rowSub: { fontFamily: Type.body, fontSize: 12, color: Swo.ink3 },
+  rowArrow: { fontFamily: Type.bodySemi, fontSize: 20, color: Swo.ink3 },
+});
 
 function EmptyState() {
   return (
@@ -671,24 +293,11 @@ function EmptyState() {
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Swo.cream },
-
-  // Chrome
-  chromeWrap: {},
-  chromeSolid: { backgroundColor: Swo.cream },
-  chromeInner: {
-    paddingHorizontal: Spacing.s6,
-    paddingTop: Spacing.s2,
-    paddingBottom: Spacing.s4,
-    gap: Spacing.s4,
-  },
-  chromeWide: { maxWidth: 720, alignSelf: 'center', width: '100%' },
-  chromeFade: { height: Spacing.s8 },
-
-  header: { gap: Spacing.s2 },
+  safe: { flex: 1, backgroundColor: Swo.cream },
+  scroll: { padding: Spacing.s6, gap: Spacing.s4 },
+  scrollWide: { paddingHorizontal: Spacing.s9, maxWidth: 720, alignSelf: 'center', width: '100%' },
+  header: { gap: Spacing.s2, marginBottom: Spacing.s3 },
   eyebrow: {
     fontFamily: Type.bodySemi,
     fontSize: 12,
@@ -703,275 +312,6 @@ const styles = StyleSheet.create({
     color: Swo.ink,
     letterSpacing: -0.5,
   },
-
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: Swo.shell,
-    borderRadius: Radius.r3,
-    padding: 4,
-    gap: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: Radius.r2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentBtnActive: {
-    backgroundColor: Swo.mustard,
-    borderWidth: 1.5,
-    borderColor: Swo.ink,
-    ...Shadow.s1,
-  },
-  segmentText: { fontFamily: Type.bodySemi, fontSize: 14, color: Swo.ink3 },
-  segmentTextActive: { color: Swo.ink },
-
-  // List view
-  listScroll: { flex: 1 },
-  listContent: {
-    paddingHorizontal: Spacing.s6,
-    paddingTop: Spacing.s2,
-    gap: Spacing.s4,
-  },
-  listContentWide: {
-    paddingHorizontal: Spacing.s9,
-    maxWidth: 720,
-    alignSelf: 'center',
-    width: '100%',
-  },
-
-  mapWebFallback: {
-    backgroundColor: Swo.skySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.s2,
-    padding: Spacing.s5,
-  },
-  mapEmoji: { fontSize: 44 },
-  mapTitle: { fontFamily: Type.displaySemi, fontSize: 18, color: Swo.ink },
-  mapBody: { fontFamily: Type.body, fontSize: 13, color: Swo.ink2, textAlign: 'center' },
-
-  // Sticker pin
-  pinWrap: { alignItems: 'center' },
-  pinWrapSelected: { transform: [{ scale: 1.12 }] },
-  pinBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.r2,
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.sticker,
-  },
-  pinBubbleActive: { backgroundColor: Swo.mustard },
-  pinBubbleRedeemed: { backgroundColor: Swo.paper, opacity: 0.85 },
-  pinBubblePlain: { backgroundColor: Swo.paper },
-  pinEmoji: { fontSize: 20 },
-  pinTail: {
-    width: 0,
-    height: 0,
-    marginTop: -2,
-    borderLeftWidth: 7,
-    borderRightWidth: 7,
-    borderTopWidth: 9,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-
-  // Cream patch sized roughly to match the Apple Maps "Maps" credit.
-  appleLogoCover: {
-    position: 'absolute',
-    left: 0,
-    width: 110,
-    height: 24,
-    backgroundColor: Swo.cream,
-  },
-
-  // Locate button (floating bottom-right on the map)
-  locateBtn: {
-    position: 'absolute',
-    width: 52,
-    height: 52,
-    borderRadius: Radius.r3,
-    backgroundColor: Swo.paper,
-    borderWidth: 1.5,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.sticker,
-  },
-  locateBtnIcon: { fontSize: 22 },
-
-  // Place card (bottom of map)
-  placeCardWrap: {
-    position: 'absolute',
-    left: Spacing.s5,
-    right: Spacing.s5,
-  },
-  placeCardWide: { maxWidth: 480, alignSelf: 'center' },
-  placeCard: {
-    backgroundColor: Swo.paper,
-    borderRadius: Radius.r4,
-    borderWidth: 1,
-    borderColor: Swo.borderSoft,
-    padding: Spacing.s4,
-    gap: Spacing.s3,
-    ...Shadow.s3,
-  },
-  placeCardCoupon: {
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    backgroundColor: Swo.mustardSoft,
-    ...Shadow.sticker,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.s3,
-  },
-  cardThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.r3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardThumbEmoji: { fontSize: 28, opacity: 0.85 },
-  cardHeaderText: { flex: 1, gap: 2 },
-  cardName: { fontFamily: Type.displaySemi, fontSize: 17, color: Swo.ink, letterSpacing: -0.2 },
-  cardAddress: { fontFamily: Type.body, fontSize: 13, color: Swo.ink3 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  ratingStar: { fontSize: 13, color: Swo.mustardDeep },
-  ratingValue: { fontFamily: Type.bodySemi, fontSize: 13, color: Swo.ink },
-  ratingCount: { fontFamily: Type.body, fontSize: 12, color: Swo.ink3 },
-  closeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeBtnText: { fontSize: 14, color: Swo.ink2, fontFamily: Type.bodySemi },
-
-  couponDivider: {
-    height: 1,
-    backgroundColor: Swo.ink,
-    opacity: 0.18,
-    marginVertical: 2,
-  },
-  couponMetaRow: { flexDirection: 'row', gap: Spacing.s2, flexWrap: 'wrap' },
-  couponHeadline: {
-    fontFamily: Type.display,
-    fontSize: 18,
-    lineHeight: 22,
-    color: Swo.ink,
-    letterSpacing: -0.2,
-  },
-  shopMetaRow: { flexDirection: 'row', gap: Spacing.s2, flexWrap: 'wrap' },
-
-  primaryBtn: {
-    minHeight: 46,
-    borderRadius: Radius.r3,
-    backgroundColor: Swo.mustard,
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.s4,
-  },
-  primaryBtnDisabled: { opacity: 0.55 },
-  primaryBtnText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink },
-  secondaryBtn: {
-    minHeight: 46,
-    borderRadius: Radius.r3,
-    backgroundColor: Swo.paper,
-    borderWidth: 1.5,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.s4,
-  },
-  secondaryBtnText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink },
-
-  // Permission modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(42, 31, 26, 0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.s6,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: Swo.paper,
-    borderRadius: Radius.r5,
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    padding: Spacing.s6,
-    gap: Spacing.s3,
-    alignItems: 'center',
-    ...Shadow.sticker,
-  },
-  modalIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.r4,
-    backgroundColor: Swo.mustardSoft,
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.s2,
-    ...Shadow.sticker,
-  },
-  modalIconEmoji: { fontSize: 36 },
-  modalTitle: {
-    fontFamily: Type.displayBlack,
-    fontSize: 22,
-    lineHeight: 26,
-    color: Swo.ink,
-    textAlign: 'center',
-    letterSpacing: -0.3,
-  },
-  modalBody: {
-    fontFamily: Type.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Swo.ink2,
-    textAlign: 'center',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: Spacing.s3,
-    marginTop: Spacing.s2,
-    width: '100%',
-  },
-  modalGhost: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: Radius.r3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalGhostText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink3 },
-  modalPrimary: {
-    flex: 1.4,
-    minHeight: 48,
-    borderRadius: Radius.r3,
-    backgroundColor: Swo.mustard,
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.s4,
-  },
-  modalPrimaryText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink },
-
-  // List sections + cards
   section: {
     fontFamily: Type.bodySemi,
     fontSize: 13,
@@ -984,6 +324,7 @@ const styles = StyleSheet.create({
   list: { gap: Spacing.s3 },
   card: {
     flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Swo.paper,
     borderRadius: Radius.r4,
     borderWidth: 1,
@@ -991,10 +332,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Shadow.s1,
   },
-  cardRedeemed: { opacity: 0.7 },
-  thumb: { width: 96, alignItems: 'center', justifyContent: 'center' },
+  cardRedeemed: { opacity: 0.65 },
+  cardPressed: { transform: [{ scale: 0.98 }], opacity: 0.85 },
+  thumb: {
+    width: 96,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 96,
+  },
   thumbEmoji: { fontSize: 40, opacity: 0.85 },
-  cardBody: { flex: 1, padding: Spacing.s4, gap: Spacing.s2 },
+  cardBody: {
+    flex: 1,
+    padding: Spacing.s4,
+    gap: Spacing.s2,
+  },
   metaRow: { flexDirection: 'row', gap: Spacing.s2, flexWrap: 'wrap' },
   headline: {
     fontFamily: Type.display,
@@ -1003,8 +355,13 @@ const styles = StyleSheet.create({
     color: Swo.ink,
     letterSpacing: -0.1,
   },
-  merchant: { fontFamily: Type.bodyMedium, fontSize: 13, color: Swo.ink3 },
-
+  merchant: {
+    fontFamily: Type.bodyMedium,
+    fontSize: 13,
+    color: Swo.ink3,
+  },
+  arrow: { paddingRight: Spacing.s4 },
+  arrowText: { fontFamily: Type.bodySemi, fontSize: 22, color: Swo.ink3 },
   empty: {
     alignItems: 'center',
     padding: Spacing.s8,

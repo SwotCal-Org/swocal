@@ -49,3 +49,6 @@ verify_jwt = true
 
 [functions.redeem]
 verify_jwt = true
+
+[functions.coupon-ui]
+verify_jwt = true

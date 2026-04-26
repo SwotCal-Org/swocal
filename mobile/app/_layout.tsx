@@ -18,6 +18,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/dm-sans';
 import { Caveat_700Bold } from '@expo-google-fonts/caveat';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { Swo } from '@/constants/Colors';
@@ -44,7 +45,6 @@ function RouteGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
-    const inTabsGroup = segments[0] === '(tabs)';
     const inMerchantGroup = segments[0] === 'merchant';
     const role = session?.user?.user_metadata?.role;
     const isMerchant = role === 'merchant';
@@ -93,6 +93,7 @@ export default function RootLayout() {
     DMSans_600SemiBold,
     DMSans_700Bold,
     Caveat_700Bold,
+    ...Ionicons.font,
   });
 
   if (!fontsLoaded) {
@@ -112,6 +113,10 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Swo.cream } }}>
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="coupon"
+                options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+              />
               <Stack.Screen name="merchant" />
             </Stack>
           </RouteGuard>
