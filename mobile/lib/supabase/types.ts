@@ -114,6 +114,7 @@ export type Database = {
           full_name: string | null
           id: string
           intent_vector: Json
+          role: string
           updated_at: string
           username: string | null
         }
@@ -123,6 +124,7 @@ export type Database = {
           full_name?: string | null
           id: string
           intent_vector?: Json
+          role?: string
           updated_at?: string
           username?: string | null
         }
@@ -132,6 +134,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           intent_vector?: Json
+          role?: string
           updated_at?: string
           username?: string | null
         }
@@ -165,6 +168,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_swipes: {
+        Row: {
+          business_address: string
+          business_category: string | null
+          business_id: string
+          business_name: string
+          direction: string
+          distance_m: number | null
+          id: string
+          swiped_at: string
+          user_id: string
+        }
+        Insert: {
+          business_address: string
+          business_category?: string | null
+          business_id: string
+          business_name: string
+          direction: string
+          distance_m?: number | null
+          id?: string
+          swiped_at?: string
+          user_id: string
+        }
+        Update: {
+          business_address?: string
+          business_category?: string | null
+          business_id?: string
+          business_name?: string
+          direction?: string
+          distance_m?: number | null
+          id?: string
+          swiped_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       swipes: {
         Row: {

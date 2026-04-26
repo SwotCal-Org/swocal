@@ -1,103 +1,645 @@
+import { useEffect, useRef, useState } from 'react';
 import {
+  Modal,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import * as Location from 'expo-location';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Chip } from '@/components/ui/Chip';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
 
 type Coupon = {
-  id: string;
-  emoji: string;
   headline: string;
-  merchant: string;
-  expires: string;
   discount: number;
-  bg: string;
+  expires: string;
   status: 'active' | 'redeemed';
 };
 
-const SAMPLE_COUPONS: Coupon[] = [
+type Place = {
+  id: string;
+  name: string;
+  address: string;
+  rating: number;
+  reviewCount: number;
+  category: string;
+  categoryEmoji: string;
+  photoBg: string;
+  photoEmoji: string;
+  distanceM: number;
+  lat: number;
+  lng: number;
+  coupon?: Coupon;
+};
+
+// Stuttgart coordinates around Marktplatz / Schillerplatz.
+const PLACES: Place[] = [
   {
     id: '1',
-    emoji: '☕',
-    headline: 'Oat flat white, on the house',
-    merchant: 'Café Mayer',
-    expires: 'Today, 13:47',
-    discount: 100,
-    bg: Swo.coralSoft,
-    status: 'active',
+    name: 'Café Mayer',
+    address: 'Marktplatz 4, Stuttgart',
+    rating: 4.8,
+    reviewCount: 312,
+    category: 'Coffee',
+    categoryEmoji: '☕',
+    photoBg: Swo.coralSoft,
+    photoEmoji: '☕',
+    distanceM: 200,
+    lat: 48.7765,
+    lng: 9.1773,
+    coupon: {
+      headline: 'Oat flat white, on the house',
+      discount: 100,
+      expires: 'Today, 13:47',
+      status: 'active',
+    },
   },
   {
     id: '2',
-    emoji: '🥐',
-    headline: 'Two croissants for one',
-    merchant: 'Bäckerei Anna',
-    expires: 'Today, 11:30',
-    discount: 50,
-    bg: Swo.mustardSoft,
-    status: 'active',
+    name: 'Bäckerei Anna',
+    address: 'Königstraße 18, Stuttgart',
+    rating: 4.6,
+    reviewCount: 198,
+    category: 'Bakery',
+    categoryEmoji: '🥐',
+    photoBg: Swo.mustardSoft,
+    photoEmoji: '🥐',
+    distanceM: 90,
+    lat: 48.7787,
+    lng: 9.1795,
+    coupon: {
+      headline: 'Two croissants for one',
+      discount: 50,
+      expires: 'Today, 11:30',
+      status: 'active',
+    },
   },
   {
     id: '3',
-    emoji: '🍰',
-    headline: 'Slice of cherry tart',
-    merchant: 'Konditorei Nest',
-    expires: 'Yesterday',
-    discount: 30,
-    bg: Swo.mintSoft,
-    status: 'redeemed',
+    name: 'Konditorei Nest',
+    address: 'Schillerplatz 3, Stuttgart',
+    rating: 4.7,
+    reviewCount: 156,
+    category: 'Cake',
+    categoryEmoji: '🍰',
+    photoBg: Swo.mintSoft,
+    photoEmoji: '🍰',
+    distanceM: 850,
+    lat: 48.7758,
+    lng: 9.1820,
+    coupon: {
+      headline: 'Slice of cherry tart',
+      discount: 30,
+      expires: 'Yesterday',
+      status: 'redeemed',
+    },
+  },
+  // Non-coupon places — show as regular shop cards on tap.
+  {
+    id: '4',
+    name: 'Weinstube Klink',
+    address: 'Bohnenviertel 12, Stuttgart',
+    rating: 4.5,
+    reviewCount: 87,
+    category: 'Wine bar',
+    categoryEmoji: '🍷',
+    photoBg: Swo.plumSoft,
+    photoEmoji: '🍷',
+    distanceM: 340,
+    lat: 48.7741,
+    lng: 9.1812,
+  },
+  {
+    id: '5',
+    name: 'Eisdiele Sole',
+    address: 'Marienstraße 8, Stuttgart',
+    rating: 4.9,
+    reviewCount: 421,
+    category: 'Gelato',
+    categoryEmoji: '🍨',
+    photoBg: Swo.skySoft,
+    photoEmoji: '🍨',
+    distanceM: 410,
+    lat: 48.7728,
+    lng: 9.1769,
   },
 ];
 
+const STUTTGART_REGION = {
+  latitude: 48.7770,
+  longitude: 9.1795,
+  latitudeDelta: 0.012,
+  longitudeDelta: 0.012,
+};
+
+// Cream-tinted Google Maps style (Android). Apple Maps on iOS uses mutedStandard.
+const SWOCAL_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: Swo.cream }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: Swo.ink2 }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: Swo.cream }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: Swo.mintSoft }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: Swo.mintDeep }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: Swo.paper }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: Swo.ink3 }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: Swo.creamDeep }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: Swo.mustardSoft }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: Swo.mustard }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: Swo.skySoft }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: Swo.sky }] },
+];
+
+const CREAM_CLEAR = 'rgba(251, 245, 234, 0)';
+
+type PermStatus = 'unknown' | 'granted' | 'denied';
+
 export default function CouponsScreen() {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const isWide = width >= 600;
 
-  const active = SAMPLE_COUPONS.filter((c) => c.status === 'active');
-  const past = SAMPLE_COUPONS.filter((c) => c.status === 'redeemed');
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [permission, setPermission] = useState<PermStatus>('unknown');
+  const [permissionModalOpen, setPermissionModalOpen] = useState(false);
+  const mapRef = useRef<MapView>(null);
+
+  const couponPlaces = PLACES.filter((p) => p.coupon);
+  const active = couponPlaces.filter((p) => p.coupon!.status === 'active');
+  const past = couponPlaces.filter((p) => p.coupon!.status === 'redeemed');
+  const selected = selectedId ? PLACES.find((p) => p.id === selectedId) ?? null : null;
+
+  // When user switches to the map, check permission and recenter (or prompt).
+  useEffect(() => {
+    if (view !== 'map') return;
+    let cancelled = false;
+    (async () => {
+      const current = await Location.getForegroundPermissionsAsync();
+      if (cancelled) return;
+      if (current.status === 'granted') {
+        setPermission('granted');
+        recenterToUser();
+      } else {
+        setPermission(current.status === 'denied' ? 'denied' : 'unknown');
+        setPermissionModalOpen(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  async function recenterToUser() {
+    try {
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      mapRef.current?.animateCamera(
+        {
+          center: { latitude: loc.coords.latitude, longitude: loc.coords.longitude },
+          zoom: 16,
+          pitch: 0,
+          heading: 0,
+        },
+        { duration: 700 }
+      );
+    } catch {
+      // Silently ignore — user keeps the default Stuttgart view.
+    }
+  }
+
+  async function requestPermission() {
+    const res = await Location.requestForegroundPermissionsAsync();
+    if (res.status === 'granted') {
+      setPermission('granted');
+      setPermissionModalOpen(false);
+      recenterToUser();
+    } else {
+      setPermission('denied');
+    }
+  }
+
+  function handleLocatePress() {
+    if (permission === 'granted') {
+      recenterToUser();
+    } else {
+      setPermissionModalOpen(true);
+    }
+  }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}>
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Your coupons</Text>
-          <Text style={styles.title}>Saved for the right moment</Text>
+    <View style={styles.root}>
+      {view === 'map' && (
+        <View style={StyleSheet.absoluteFill}>
+          <CouponMap
+            mapRef={mapRef}
+            places={PLACES}
+            selectedId={selectedId}
+            onSelectPlace={setSelectedId}
+            showsUserDot={permission === 'granted'}
+          />
         </View>
+      )}
 
-        <Text style={styles.section}>Ready to redeem · {active.length}</Text>
-        <View style={styles.list}>
-          {active.length === 0 ? (
-            <EmptyState />
-          ) : (
-            active.map((c) => <CouponRow key={c.id} c={c} />)
-          )}
-        </View>
-
-        {past.length > 0 && (
-          <>
-            <Text style={[styles.section, styles.sectionMt]}>Used</Text>
-            <View style={styles.list}>
-              {past.map((c) => (
-                <CouponRow key={c.id} c={c} />
-              ))}
+      {/* Top chrome — solid cream behind notch/header/segment, then a soft fade. */}
+      <View style={styles.chromeWrap} pointerEvents="box-none">
+        <View style={[styles.chromeSolid, { paddingTop: insets.top }]}>
+          <View style={[styles.chromeInner, isWide && styles.chromeWide]}>
+            <View style={styles.header}>
+              <Text style={styles.eyebrow}>Your coupons</Text>
+              <Text style={styles.title}>Saved for the right moment</Text>
             </View>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            <View style={styles.segment}>
+              <SegmentBtn label="List" active={view === 'list'} onPress={() => setView('list')} />
+              <SegmentBtn label="Map" active={view === 'map'} onPress={() => setView('map')} />
+            </View>
+          </View>
+        </View>
+        <LinearGradient
+          colors={[Swo.cream, CREAM_CLEAR]}
+          style={styles.chromeFade}
+          pointerEvents="none"
+        />
+      </View>
+
+      {view === 'list' && (
+        <ScrollView
+          style={styles.listScroll}
+          contentContainerStyle={[
+            styles.listContent,
+            isWide && styles.listContentWide,
+            { paddingBottom: tabBarHeight + Spacing.s6 },
+          ]}
+        >
+          <Text style={styles.section}>Ready to redeem · {active.length}</Text>
+          <View style={styles.list}>
+            {active.length === 0 ? (
+              <EmptyState />
+            ) : (
+              active.map((p) => <CouponRow key={p.id} place={p} />)
+            )}
+          </View>
+
+          {past.length > 0 && (
+            <>
+              <Text style={[styles.section, styles.sectionMt]}>Used</Text>
+              <View style={styles.list}>
+                {past.map((p) => (
+                  <CouponRow key={p.id} place={p} />
+                ))}
+              </View>
+            </>
+          )}
+        </ScrollView>
+      )}
+
+      {/* Map overlays — recenter button + selected place card. */}
+      {view === 'map' && (
+        <>
+          {/* Cream-tinted strip covering the Apple Maps logo at bottom-left.
+              MapKit doesn't expose a prop to hide it, so we mask it. */}
+          {Platform.OS === 'ios' && (
+            <View
+              pointerEvents="none"
+              style={[styles.appleLogoCover, { bottom: tabBarHeight }]}
+            />
+          )}
+
+          <Pressable
+            onPress={handleLocatePress}
+            accessibilityRole="button"
+            accessibilityLabel="Center on my location"
+            style={({ pressed }) => [
+              styles.locateBtn,
+              {
+                bottom: Math.max(insets.bottom, Spacing.s3),
+                right: Spacing.s5,
+              },
+              pressed && { transform: [{ scale: 0.94 }] },
+            ]}
+          >
+            <Text style={styles.locateBtnIcon}>📍</Text>
+          </Pressable>
+
+          {selected && (
+            <View
+              style={[
+                styles.placeCardWrap,
+                { bottom: tabBarHeight + Spacing.s4 },
+                isWide && styles.placeCardWide,
+              ]}
+            >
+              {selected.coupon ? (
+                <CouponPlaceCard place={selected} onClose={() => setSelectedId(null)} />
+              ) : (
+                <ShopPlaceCard place={selected} onClose={() => setSelectedId(null)} />
+              )}
+            </View>
+          )}
+        </>
+      )}
+
+      <LocationPermissionModal
+        visible={permissionModalOpen}
+        denied={permission === 'denied'}
+        onAllow={requestPermission}
+        onClose={() => setPermissionModalOpen(false)}
+      />
+    </View>
   );
 }
 
-function CouponRow({ c }: { c: Coupon }) {
+// ─── Segmented control ───────────────────────────────────────────────────────
+
+function SegmentBtn({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      style={({ pressed }) => [
+        styles.segmentBtn,
+        active && styles.segmentBtnActive,
+        pressed && !active && { opacity: 0.7 },
+      ]}
+    >
+      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// ─── Map ─────────────────────────────────────────────────────────────────────
+
+function CouponMap({
+  mapRef,
+  places,
+  selectedId,
+  onSelectPlace,
+  showsUserDot,
+}: {
+  mapRef: React.RefObject<MapView | null>;
+  places: Place[];
+  selectedId: string | null;
+  onSelectPlace: (id: string | null) => void;
+  showsUserDot: boolean;
+}) {
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[StyleSheet.absoluteFill, styles.mapWebFallback]}>
+        <Text style={styles.mapEmoji}>🗺️</Text>
+        <Text style={styles.mapTitle}>Map preview is mobile-only</Text>
+        <Text style={styles.mapBody}>Open on iOS or Android to see the map.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <MapView
+      ref={mapRef}
+      style={StyleSheet.absoluteFill}
+      provider={PROVIDER_DEFAULT}
+      initialRegion={STUTTGART_REGION}
+      userInterfaceStyle="light"
+      mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
+      customMapStyle={SWOCAL_MAP_STYLE}
+      legalLabelInsets={{ bottom: -100, right: -100, top: 0, left: 0 }}
+      showsUserLocation={showsUserDot}
+      showsMyLocationButton={false}
+      showsCompass={false}
+      showsPointsOfInterest={false}
+      showsBuildings={false}
+      showsTraffic={false}
+      showsIndoors={false}
+      toolbarEnabled={false}
+      pitchEnabled={false}
+      rotateEnabled={false}
+      onPress={() => onSelectPlace(null)}
+      camera={{
+        center: { latitude: STUTTGART_REGION.latitude, longitude: STUTTGART_REGION.longitude },
+        pitch: 0,
+        heading: 0,
+        zoom: 15,
+        altitude: 2000,
+      }}
+    >
+      {places.map((p) => (
+        <Marker
+          key={p.id}
+          coordinate={{ latitude: p.lat, longitude: p.lng }}
+          anchor={{ x: 0.5, y: 1 }}
+          tracksViewChanges={selectedId === p.id}
+          onPress={(e) => {
+            e.stopPropagation();
+            onSelectPlace(p.id);
+          }}
+        >
+          <StickerPin
+            emoji={p.photoEmoji}
+            kind={p.coupon ? (p.coupon.status === 'redeemed' ? 'redeemed' : 'active') : 'plain'}
+            selected={selectedId === p.id}
+          />
+        </Marker>
+      ))}
+    </MapView>
+  );
+}
+
+function StickerPin({
+  emoji,
+  kind,
+  selected,
+}: {
+  emoji: string;
+  kind: 'active' | 'redeemed' | 'plain';
+  selected: boolean;
+}) {
+  const bubbleStyle =
+    kind === 'active'
+      ? styles.pinBubbleActive
+      : kind === 'redeemed'
+      ? styles.pinBubbleRedeemed
+      : styles.pinBubblePlain;
+  const tailColor =
+    kind === 'active' ? Swo.ink : kind === 'redeemed' ? Swo.ink3 : Swo.ink2;
+  return (
+    <View style={[styles.pinWrap, selected && styles.pinWrapSelected]}>
+      <View style={[styles.pinBubble, bubbleStyle]}>
+        <Text style={styles.pinEmoji}>{emoji}</Text>
+      </View>
+      <View style={[styles.pinTail, { borderTopColor: tailColor }]} />
+    </View>
+  );
+}
+
+// ─── Place cards (open on marker tap) ────────────────────────────────────────
+
+function CouponPlaceCard({ place, onClose }: { place: Place; onClose: () => void }) {
+  const c = place.coupon!;
+  const redeemed = c.status === 'redeemed';
+  return (
+    <View style={[styles.placeCard, styles.placeCardCoupon, redeemed && { opacity: 0.85 }]}>
+      <CardHeader place={place} onClose={onClose} />
+      <View style={styles.couponDivider} />
+      <View style={styles.couponMetaRow}>
+        <Chip
+          label={redeemed ? 'Redeemed' : `${c.discount}% off`}
+          variant={redeemed ? 'mint' : 'mustard'}
+        />
+        <Chip label={`⏱ ${c.expires}`} variant="soft" />
+      </View>
+      <Text style={styles.couponHeadline}>{c.headline}</Text>
+      <Pressable
+        accessibilityRole="button"
+        disabled={redeemed}
+        style={({ pressed }) => [
+          styles.primaryBtn,
+          redeemed && styles.primaryBtnDisabled,
+          pressed && !redeemed && { transform: [{ scale: 0.98 }] },
+        ]}
+      >
+        <Text style={styles.primaryBtnText}>
+          {redeemed ? 'Already used' : 'Redeem coupon'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ShopPlaceCard({ place, onClose }: { place: Place; onClose: () => void }) {
+  return (
+    <View style={styles.placeCard}>
+      <CardHeader place={place} onClose={onClose} />
+      <View style={styles.shopMetaRow}>
+        <Chip label={`${place.categoryEmoji}  ${place.category}`} variant="soft" />
+        <Chip label={`📍 ${place.distanceM}m`} variant="soft" />
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.secondaryBtn,
+          pressed && { transform: [{ scale: 0.98 }] },
+        ]}
+      >
+        <Text style={styles.secondaryBtnText}>Get directions</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function CardHeader({ place, onClose }: { place: Place; onClose: () => void }) {
+  return (
+    <View style={styles.cardHeader}>
+      <View style={[styles.cardThumb, { backgroundColor: place.photoBg }]}>
+        <Text style={styles.cardThumbEmoji}>{place.photoEmoji}</Text>
+      </View>
+      <View style={styles.cardHeaderText}>
+        <Text style={styles.cardName} numberOfLines={1}>
+          {place.name}
+        </Text>
+        <Text style={styles.cardAddress} numberOfLines={1}>
+          {place.address}
+        </Text>
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingStar}>★</Text>
+          <Text style={styles.ratingValue}>{place.rating.toFixed(1)}</Text>
+          <Text style={styles.ratingCount}>({place.reviewCount})</Text>
+        </View>
+      </View>
+      <Pressable
+        onPress={onClose}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+        style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
+      >
+        <Text style={styles.closeBtnText}>✕</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── Location permission modal ───────────────────────────────────────────────
+
+function LocationPermissionModal({
+  visible,
+  denied,
+  onAllow,
+  onClose,
+}: {
+  visible: boolean;
+  denied: boolean;
+  onAllow: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalIconWrap}>
+            <Text style={styles.modalIconEmoji}>📍</Text>
+          </View>
+          <Text style={styles.modalTitle}>
+            {denied ? 'Location is off' : 'Find deals near you'}
+          </Text>
+          <Text style={styles.modalBody}>
+            {denied
+              ? 'Open Settings to allow location access — without it we can’t show how close each coupon is.'
+              : 'Allow location so we can show coupons and shops within walking distance, and center the map on you.'}
+          </Text>
+          <View style={styles.modalActions}>
+            <Pressable
+              onPress={onClose}
+              style={({ pressed }) => [styles.modalGhost, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.modalGhostText}>Not now</Text>
+            </Pressable>
+            <Pressable
+              onPress={onAllow}
+              style={({ pressed }) => [
+                styles.modalPrimary,
+                pressed && { transform: [{ scale: 0.98 }] },
+              ]}
+            >
+              <Text style={styles.modalPrimaryText}>
+                {denied ? 'Try again' : 'Allow location'}
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── List view rows ──────────────────────────────────────────────────────────
+
+function CouponRow({ place }: { place: Place }) {
+  const c = place.coupon!;
   const redeemed = c.status === 'redeemed';
   return (
     <View style={[styles.card, redeemed && styles.cardRedeemed]}>
-      <View style={[styles.thumb, { backgroundColor: c.bg }]}>
-        <Text style={styles.thumbEmoji}>{c.emoji}</Text>
+      <View style={[styles.thumb, { backgroundColor: place.photoBg }]}>
+        <Text style={styles.thumbEmoji}>{place.photoEmoji}</Text>
       </View>
       <View style={styles.cardBody}>
         <View style={styles.metaRow}>
@@ -106,11 +648,12 @@ function CouponRow({ c }: { c: Coupon }) {
             variant={redeemed ? 'mint' : 'mustard'}
           />
           <Chip label={`⏱ ${c.expires}`} variant="soft" />
+          <Chip label={`📍 ${place.distanceM}m`} variant="soft" />
         </View>
         <Text style={styles.headline} numberOfLines={2}>
           {c.headline}
         </Text>
-        <Text style={styles.merchant}>{c.merchant}</Text>
+        <Text style={styles.merchant}>{place.name}</Text>
       </View>
     </View>
   );
@@ -128,11 +671,24 @@ function EmptyState() {
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Swo.cream },
-  scroll: { padding: Spacing.s6, gap: Spacing.s4 },
-  scrollWide: { paddingHorizontal: Spacing.s9, maxWidth: 720, alignSelf: 'center', width: '100%' },
-  header: { gap: Spacing.s2, marginBottom: Spacing.s3 },
+  root: { flex: 1, backgroundColor: Swo.cream },
+
+  // Chrome
+  chromeWrap: {},
+  chromeSolid: { backgroundColor: Swo.cream },
+  chromeInner: {
+    paddingHorizontal: Spacing.s6,
+    paddingTop: Spacing.s2,
+    paddingBottom: Spacing.s4,
+    gap: Spacing.s4,
+  },
+  chromeWide: { maxWidth: 720, alignSelf: 'center', width: '100%' },
+  chromeFade: { height: Spacing.s8 },
+
+  header: { gap: Spacing.s2 },
   eyebrow: {
     fontFamily: Type.bodySemi,
     fontSize: 12,
@@ -147,6 +703,275 @@ const styles = StyleSheet.create({
     color: Swo.ink,
     letterSpacing: -0.5,
   },
+
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: Swo.shell,
+    borderRadius: Radius.r3,
+    padding: 4,
+    gap: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.r2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentBtnActive: {
+    backgroundColor: Swo.mustard,
+    borderWidth: 1.5,
+    borderColor: Swo.ink,
+    ...Shadow.s1,
+  },
+  segmentText: { fontFamily: Type.bodySemi, fontSize: 14, color: Swo.ink3 },
+  segmentTextActive: { color: Swo.ink },
+
+  // List view
+  listScroll: { flex: 1 },
+  listContent: {
+    paddingHorizontal: Spacing.s6,
+    paddingTop: Spacing.s2,
+    gap: Spacing.s4,
+  },
+  listContentWide: {
+    paddingHorizontal: Spacing.s9,
+    maxWidth: 720,
+    alignSelf: 'center',
+    width: '100%',
+  },
+
+  mapWebFallback: {
+    backgroundColor: Swo.skySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.s2,
+    padding: Spacing.s5,
+  },
+  mapEmoji: { fontSize: 44 },
+  mapTitle: { fontFamily: Type.displaySemi, fontSize: 18, color: Swo.ink },
+  mapBody: { fontFamily: Type.body, fontSize: 13, color: Swo.ink2, textAlign: 'center' },
+
+  // Sticker pin
+  pinWrap: { alignItems: 'center' },
+  pinWrapSelected: { transform: [{ scale: 1.12 }] },
+  pinBubble: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.r2,
+    borderWidth: 2,
+    borderColor: Swo.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.sticker,
+  },
+  pinBubbleActive: { backgroundColor: Swo.mustard },
+  pinBubbleRedeemed: { backgroundColor: Swo.paper, opacity: 0.85 },
+  pinBubblePlain: { backgroundColor: Swo.paper },
+  pinEmoji: { fontSize: 20 },
+  pinTail: {
+    width: 0,
+    height: 0,
+    marginTop: -2,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+
+  // Cream patch sized roughly to match the Apple Maps "Maps" credit.
+  appleLogoCover: {
+    position: 'absolute',
+    left: 0,
+    width: 110,
+    height: 24,
+    backgroundColor: Swo.cream,
+  },
+
+  // Locate button (floating bottom-right on the map)
+  locateBtn: {
+    position: 'absolute',
+    width: 52,
+    height: 52,
+    borderRadius: Radius.r3,
+    backgroundColor: Swo.paper,
+    borderWidth: 1.5,
+    borderColor: Swo.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.sticker,
+  },
+  locateBtnIcon: { fontSize: 22 },
+
+  // Place card (bottom of map)
+  placeCardWrap: {
+    position: 'absolute',
+    left: Spacing.s5,
+    right: Spacing.s5,
+  },
+  placeCardWide: { maxWidth: 480, alignSelf: 'center' },
+  placeCard: {
+    backgroundColor: Swo.paper,
+    borderRadius: Radius.r4,
+    borderWidth: 1,
+    borderColor: Swo.borderSoft,
+    padding: Spacing.s4,
+    gap: Spacing.s3,
+    ...Shadow.s3,
+  },
+  placeCardCoupon: {
+    borderWidth: 2,
+    borderColor: Swo.ink,
+    backgroundColor: Swo.mustardSoft,
+    ...Shadow.sticker,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.s3,
+  },
+  cardThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.r3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardThumbEmoji: { fontSize: 28, opacity: 0.85 },
+  cardHeaderText: { flex: 1, gap: 2 },
+  cardName: { fontFamily: Type.displaySemi, fontSize: 17, color: Swo.ink, letterSpacing: -0.2 },
+  cardAddress: { fontFamily: Type.body, fontSize: 13, color: Swo.ink3 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  ratingStar: { fontSize: 13, color: Swo.mustardDeep },
+  ratingValue: { fontFamily: Type.bodySemi, fontSize: 13, color: Swo.ink },
+  ratingCount: { fontFamily: Type.body, fontSize: 12, color: Swo.ink3 },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: { fontSize: 14, color: Swo.ink2, fontFamily: Type.bodySemi },
+
+  couponDivider: {
+    height: 1,
+    backgroundColor: Swo.ink,
+    opacity: 0.18,
+    marginVertical: 2,
+  },
+  couponMetaRow: { flexDirection: 'row', gap: Spacing.s2, flexWrap: 'wrap' },
+  couponHeadline: {
+    fontFamily: Type.display,
+    fontSize: 18,
+    lineHeight: 22,
+    color: Swo.ink,
+    letterSpacing: -0.2,
+  },
+  shopMetaRow: { flexDirection: 'row', gap: Spacing.s2, flexWrap: 'wrap' },
+
+  primaryBtn: {
+    minHeight: 46,
+    borderRadius: Radius.r3,
+    backgroundColor: Swo.mustard,
+    borderWidth: 2,
+    borderColor: Swo.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.s4,
+  },
+  primaryBtnDisabled: { opacity: 0.55 },
+  primaryBtnText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink },
+  secondaryBtn: {
+    minHeight: 46,
+    borderRadius: Radius.r3,
+    backgroundColor: Swo.paper,
+    borderWidth: 1.5,
+    borderColor: Swo.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.s4,
+  },
+  secondaryBtnText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink },
+
+  // Permission modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(42, 31, 26, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.s6,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: Swo.paper,
+    borderRadius: Radius.r5,
+    borderWidth: 2,
+    borderColor: Swo.ink,
+    padding: Spacing.s6,
+    gap: Spacing.s3,
+    alignItems: 'center',
+    ...Shadow.sticker,
+  },
+  modalIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: Radius.r4,
+    backgroundColor: Swo.mustardSoft,
+    borderWidth: 2,
+    borderColor: Swo.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.s2,
+    ...Shadow.sticker,
+  },
+  modalIconEmoji: { fontSize: 36 },
+  modalTitle: {
+    fontFamily: Type.displayBlack,
+    fontSize: 22,
+    lineHeight: 26,
+    color: Swo.ink,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  modalBody: {
+    fontFamily: Type.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Swo.ink2,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Spacing.s3,
+    marginTop: Spacing.s2,
+    width: '100%',
+  },
+  modalGhost: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: Radius.r3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalGhostText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink3 },
+  modalPrimary: {
+    flex: 1.4,
+    minHeight: 48,
+    borderRadius: Radius.r3,
+    backgroundColor: Swo.mustard,
+    borderWidth: 2,
+    borderColor: Swo.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.s4,
+  },
+  modalPrimaryText: { fontFamily: Type.bodySemi, fontSize: 15, color: Swo.ink },
+
+  // List sections + cards
   section: {
     fontFamily: Type.bodySemi,
     fontSize: 13,
@@ -167,17 +992,9 @@ const styles = StyleSheet.create({
     ...Shadow.s1,
   },
   cardRedeemed: { opacity: 0.7 },
-  thumb: {
-    width: 96,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  thumb: { width: 96, alignItems: 'center', justifyContent: 'center' },
   thumbEmoji: { fontSize: 40, opacity: 0.85 },
-  cardBody: {
-    flex: 1,
-    padding: Spacing.s4,
-    gap: Spacing.s2,
-  },
+  cardBody: { flex: 1, padding: Spacing.s4, gap: Spacing.s2 },
   metaRow: { flexDirection: 'row', gap: Spacing.s2, flexWrap: 'wrap' },
   headline: {
     fontFamily: Type.display,
@@ -186,11 +1003,8 @@ const styles = StyleSheet.create({
     color: Swo.ink,
     letterSpacing: -0.1,
   },
-  merchant: {
-    fontFamily: Type.bodyMedium,
-    fontSize: 13,
-    color: Swo.ink3,
-  },
+  merchant: { fontFamily: Type.bodyMedium, fontSize: 13, color: Swo.ink3 },
+
   empty: {
     alignItems: 'center',
     padding: Spacing.s8,
@@ -202,5 +1016,11 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: { fontSize: 48 },
   emptyTitle: { fontFamily: Type.displaySemi, fontSize: 20, color: Swo.ink },
-  emptyBody: { fontFamily: Type.body, fontSize: 14, color: Swo.ink2, textAlign: 'center', lineHeight: 20 },
+  emptyBody: {
+    fontFamily: Type.body,
+    fontSize: 14,
+    color: Swo.ink2,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });

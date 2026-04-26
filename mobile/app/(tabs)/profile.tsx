@@ -4,35 +4,65 @@ import {
   StyleSheet,
   Text,
   View,
+  Pressable,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AvatarUpload } from '@/components/avatar-upload';
+import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
 import { useAuth } from '@/providers/AuthProvider';
 import { getMyProfile } from '@/services/profile';
+import { supabase } from '@/lib/supabase/client';
 
 const PREFS = ['Coffee', 'Local food', 'Cozy spots', 'Quick bites', 'Sweet stuff', 'Wine bar'];
 const ACTIVE = new Set(['Coffee', 'Cozy spots', 'Sweet stuff']);
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [fullName, setFullName] = useState<string>('Your profile');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  const initial = (user?.email ?? '?').charAt(0).toUpperCase();
+  const memberSince = user?.created_at?.slice(0, 10);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadName() {
+      if (!user?.id) return;
+      const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+      if (cancelled) return;
+      const fallback =
+        (typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name) ||
+        user.email?.split('@')[0] ||
+        'Your profile';
+      setFullName((data?.full_name || fallback).trim());
+    }
+    loadName();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
     getMyProfile()
-      .then((p) => { if (mounted) setAvatarUrl(p?.avatar_url ?? null); })
-      .catch(() => { /* ignore — profile may not yet exist */ });
-    return () => { mounted = false; };
+      .then((p) => {
+        if (mounted) setAvatarUrl(p?.avatar_url ?? null);
+      })
+      .catch(() => {
+        // ignore — profile may not yet exist
+      });
+    return () => {
+      mounted = false;
+    };
   }, [user?.id]);
-
-  const initial = (user?.email ?? '?').charAt(0).toUpperCase();
-  const memberSince = user?.created_at?.slice(0, 10);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -40,7 +70,7 @@ export default function ProfileScreen() {
         <View style={styles.heroCard}>
           <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} fallback={initial} />
           <Text style={styles.email} numberOfLines={1}>
-            {user?.email}
+            {fullName}
           </Text>
           {memberSince ? (
             <Text style={styles.muted}>Member since {memberSince}</Text>
@@ -81,6 +111,13 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/profile/edit')}
+            style={({ pressed }) => [styles.editLink, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.editLinkText}>Edit profile</Text>
+          </Pressable>
           <Button title="Sign out" variant="secondary" onPress={signOut} />
         </View>
       </ScrollView>
@@ -167,5 +204,16 @@ const styles = StyleSheet.create({
     gap: Spacing.s2,
     marginTop: Spacing.s2,
   },
-  actions: { marginTop: Spacing.s2 },
+  actions: { marginTop: Spacing.s2, gap: Spacing.s3 },
+  editLink: {
+    alignSelf: 'flex-start',
+    backgroundColor: Swo.paper,
+    borderRadius: Radius.r3,
+    borderWidth: 1.5,
+    borderColor: Swo.ink,
+    paddingHorizontal: Spacing.s4,
+    paddingVertical: Spacing.s2,
+    ...Shadow.stickerSoft,
+  },
+  editLinkText: { fontFamily: Type.bodySemi, fontSize: 14, color: Swo.ink },
 });

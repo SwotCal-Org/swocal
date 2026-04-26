@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { supabase } from '@/lib/supabase/client';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -23,11 +25,14 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [role, setRole] = useState<'user' | 'merchant'>('user');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async () => {
     setError(null);
+    setInfo(null);
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
       return;
@@ -37,11 +42,35 @@ export default function SignupScreen() {
       return;
     }
     setSubmitting(true);
-    const { error: e } = await signUp(email.trim(), password, fullName.trim() || undefined);
+    const { error: e, needsConfirmation, userId } = await signUp(
+      email.trim(),
+      password,
+      fullName.trim() || undefined,
+      role
+    );
     setSubmitting(false);
-    if (e) setError(e);
-    // On success the AuthProvider session updates and the route guard in
-    // app/_layout.tsx redirects into (tabs) automatically.
+    if (e) {
+      setError(e);
+      return;
+    }
+    if (userId) {
+      // Best-effort profile seed: if email confirmation is required, this may be blocked by RLS until first login.
+      await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: userId,
+            full_name: fullName.trim() || null,
+            role,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        )
+        .then(() => undefined);
+    }
+    if (needsConfirmation) {
+      setInfo('Check your email to confirm your account.');
+    }
   };
 
   return (
@@ -64,6 +93,31 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.form}>
+              <View style={styles.roleWrap}>
+                <Text style={styles.roleLabel}>Are you...</Text>
+                <View style={styles.roleSegment}>
+                  <Pressable
+                    onPress={() => setRole('user')}
+                    style={({ pressed }) => [
+                      styles.roleBtn,
+                      role === 'user' && styles.roleBtnActive,
+                      pressed && role !== 'user' && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={[styles.roleText, role === 'user' && styles.roleTextActive]}>User</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setRole('merchant')}
+                    style={({ pressed }) => [
+                      styles.roleBtn,
+                      role === 'merchant' && styles.roleBtnActive,
+                      pressed && role !== 'merchant' && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={[styles.roleText, role === 'merchant' && styles.roleTextActive]}>Merchant</Text>
+                  </Pressable>
+                </View>
+              </View>
               <Input label="Full name (optional)" value={fullName} onChangeText={setFullName} placeholder="Mia Müller" />
               <Input
                 label="Email"
@@ -91,6 +145,7 @@ export default function SignupScreen() {
                 onChangeText={setConfirm}
               />
               {error ? <Text style={styles.error}>{error}</Text> : null}
+              {info ? <Text style={styles.info}>{info}</Text> : null}
               <Button title="Create account" onPress={onSubmit} loading={submitting} />
             </View>
 
@@ -140,8 +195,33 @@ const styles = StyleSheet.create({
   },
   tagline: { fontFamily: Type.body, fontSize: 15, color: Swo.ink2, lineHeight: 22 },
   form: { gap: Spacing.s4 },
+  roleWrap: { gap: Spacing.s2 },
+  roleLabel: { fontFamily: Type.bodySemi, fontSize: 13, color: Swo.ink2, letterSpacing: 0.2 },
+  roleSegment: {
+    flexDirection: 'row',
+    backgroundColor: Swo.creamDeep,
+    borderRadius: Radius.r3,
+    padding: 4,
+    gap: 4,
+  },
+  roleBtn: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: Radius.r2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleBtnActive: {
+    backgroundColor: Swo.mustard,
+    borderWidth: 1.5,
+    borderColor: Swo.ink,
+    ...Shadow.s1,
+  },
+  roleText: { fontFamily: Type.bodySemi, fontSize: 14, color: Swo.ink3 },
+  roleTextActive: { color: Swo.ink },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
   footerText: { color: Swo.ink2, fontSize: 14, fontFamily: Type.body },
   footerLink: { color: Swo.coralDeep, fontSize: 14, fontFamily: Type.bodySemi },
+  info: { color: Swo.mintDeep, fontSize: 13, fontFamily: Type.bodyMedium },
   error: { color: Swo.danger, fontSize: 13, fontFamily: Type.bodyMedium },
 });

@@ -44,10 +44,31 @@ function RouteGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
+    const inTabsGroup = segments[0] === '(tabs)';
+    const inMerchantGroup = segments[0] === 'merchant';
+    const role = session?.user?.user_metadata?.role;
+    const isMerchant = role === 'merchant';
+
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
+      return;
+    }
+
+    if (!session) return;
+
+    // Merchants should not land in consumer tabs/user onboarding flow.
+    if (isMerchant && !inMerchantGroup) {
+      router.replace('/merchant/onboarding');
+      return;
+    }
+
+    if (!isMerchant && inMerchantGroup) {
       router.replace('/(tabs)');
+      return;
+    }
+
+    if (inAuthGroup) {
+      router.replace(isMerchant ? '/merchant/onboarding' : '/(tabs)');
     }
   }, [session, loading, segments, router]);
 
@@ -91,6 +112,7 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Swo.cream } }}>
               <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="merchant" />
             </Stack>
           </RouteGuard>
           <StatusBar style="dark" />
