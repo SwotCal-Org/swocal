@@ -4,7 +4,7 @@ This document updates the technical sections using the current implementation in
 
 ## Executive Architecture Diagram
 
-```mermaid
+```mermaid.
 flowchart LR
   U[User] --> App[Expo Mobile App\nReact Native + expo-router]
   App --> Auth[Supabase Auth]
