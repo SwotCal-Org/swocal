@@ -107,6 +107,42 @@ export type Database = {
         }
         Relationships: []
       }
+      merchant_business_links: {
+        Row: {
+          created_at: string
+          google_place_address: string | null
+          google_place_id: string
+          google_place_name: string
+          id: string
+          link_status: string
+          linked_at: string
+          merchant_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          google_place_address?: string | null
+          google_place_id: string
+          google_place_name: string
+          id?: string
+          link_status?: string
+          linked_at?: string
+          merchant_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          google_place_address?: string | null
+          google_place_id?: string
+          google_place_name?: string
+          id?: string
+          link_status?: string
+          linked_at?: string
+          merchant_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

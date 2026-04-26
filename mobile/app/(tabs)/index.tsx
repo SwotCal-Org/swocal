@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from 'expo-router';
@@ -18,11 +18,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Location from 'expo-location';
 
 import { SwocalCard, type Offer } from '@/components/swocal-card';
-import {
-  makeRedemptionToken,
-  MatchAfterSwipeOverlay,
-  SwipeCouponScreen,
-} from '@/components/swipe/match-coupon-overlays';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
@@ -269,8 +264,8 @@ export default function SwipeScreen() {
   const [selectedBudget, setSelectedBudget] = useState<string>('€€');
   const [firstName, setFirstName] = useState('there');
   const [selectedPlace, setSelectedPlace] = useState<Offer | null>(null);
-  const [matchOffer, setMatchOffer] = useState<Offer | null>(null);
-  const [couponSession, setCouponSession] = useState<{ offer: Offer; token: string } | null>(null);
+  const [swipePersistError, setSwipePersistError] = useState<string | null>(null);
+  const [swipeDebug, setSwipeDebug] = useState<string | null>(null);
 
   const stepAnim = useSharedValue(1);
   const introAnim = useSharedValue(0);
@@ -411,9 +406,21 @@ export default function SwipeScreen() {
         try {
           const { stores } = await fetchNearbyStores(latitude, longitude);
           if (cancelled) return;
+          let swipedIds = new Set<string>();
+          if (user?.id) {
+            const { data: swipedRows, error: swipedError } = await supabase
+              .from('user_swipes')
+              .select('business_id')
+              .eq('user_id', user.id);
+            if (!cancelled && !swipedError) {
+              swipedIds = new Set((swipedRows ?? []).map((row) => row.business_id));
+            }
+          }
+
           const nextOffers = stores
             .map((store) => toOffer(store, latitude, longitude))
             .filter((offer): offer is Offer => offer != null)
+            .filter((offer) => !swipedIds.has(offer.id))
             .sort((a, b) => a.distanceM - b.distanceM)
             .slice(0, 20);
           setOffers(nextOffers);
@@ -433,7 +440,7 @@ export default function SwipeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!onboardingOpen || onboardingPhase !== 'intro') return;
@@ -455,7 +462,7 @@ export default function SwipeScreen() {
 
   useEffect(() => {
     // Apply on this screen and parent navigator to avoid tab bar bleed-through.
-    const hideTabBar = onboardingOpen || !!selectedPlace || !!matchOffer || !!couponSession;
+    const hideTabBar = onboardingOpen || !!selectedPlace;
     navigation.setOptions({
       tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
     });
@@ -469,24 +476,22 @@ export default function SwipeScreen() {
       navigation.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
       parent?.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
     };
-  }, [navigation, onboardingOpen, selectedPlace, matchOffer, couponSession]);
+  }, [navigation, onboardingOpen, selectedPlace]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const hideTabBar = onboardingOpen || !!selectedPlace || !!matchOffer || !!couponSession;
-      navigation.setOptions({
-        tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
-      });
-      const parent = navigation.getParent();
-      parent?.setOptions({
-        tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
-      });
-      return () => {
-        navigation.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
-        parent?.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
-      };
-    }, [navigation, onboardingOpen, selectedPlace, matchOffer, couponSession])
-  );
+  useFocusEffect(() => {
+    const hideTabBar = onboardingOpen || !!selectedPlace;
+    navigation.setOptions({
+      tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
+    });
+    const parent = navigation.getParent();
+    parent?.setOptions({
+      tabBarStyle: hideTabBar ? TAB_BAR_HIDDEN_STYLE : TAB_BAR_VISIBLE_STYLE,
+    });
+    return () => {
+      navigation.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
+      parent?.setOptions({ tabBarStyle: TAB_BAR_VISIBLE_STYLE });
+    };
+  });
 
   const onboardingScreens = useMemo(
     () => [
@@ -559,7 +564,14 @@ export default function SwipeScreen() {
   }
 
   function recordSwipe(direction: 'left' | 'right', offer: Offer) {
-    if (!user?.id) return;
+    setOffers((prev) => prev.filter((item) => item.id !== offer.id));
+    if (!user?.id) {
+      setSwipePersistError('Swipe not saved: no authenticated user');
+      setSwipeDebug(`dir=${direction} business_id=${offer.id} user_id=<none> status=blocked`);
+      return;
+    }
+    setSwipePersistError(null);
+    setSwipeDebug(`dir=${direction} business_id=${offer.id} user_id=${user.id} status=sending`);
     // Fire-and-forget: we don't block swipe UX on network latency.
     void supabase
       .from('user_swipes')
@@ -576,15 +588,24 @@ export default function SwipeScreen() {
       .then(({ error }) => {
         if (error) {
           console.warn('Failed to store swipe:', error.message);
+          setSwipePersistError(`Swipe save failed: ${error.message}`);
+          setSwipeDebug(
+            `dir=${direction} business_id=${offer.id} user_id=${user.id} status=error message=${error.message}`
+          );
+          return;
+        }
+        setSwipeDebug(`dir=${direction} business_id=${offer.id} user_id=${user.id} status=saved:user_swipes`);
+
+        // Legacy analytics table expects generated_offers UUID ids.
+        if (isUuid(offer.id)) {
+          void supabase.from('swipes').insert({
+            offer_id: offer.id,
+            user_id: user.id,
+            direction,
+            created_at: new Date().toISOString(),
+          });
         }
       });
-  }
-
-  function onDeckSwipe(direction: 'left' | 'right', offer: Offer) {
-    recordSwipe(direction, offer);
-    if (direction === 'right') {
-      setMatchOffer(offer);
-    }
   }
 
   if (onboardingOpen) {
@@ -803,7 +824,7 @@ export default function SwipeScreen() {
           <SwipeStack
             offers={offers}
             onOpenPlace={(offer) => setSelectedPlace(offer)}
-            onSwipe={onDeckSwipe}
+            onSwipe={recordSwipe}
           />
         ) : (
           <View style={screenStyles.deckState}>
@@ -820,6 +841,18 @@ export default function SwipeScreen() {
         <Text style={screenStyles.hintText}>← not for now</Text>
         <Text style={screenStyles.hintText}>yes please →</Text>
       </View>
+      {swipeDebug ? (
+        <View style={screenStyles.swipeDebugWrap}>
+          <Text selectable style={screenStyles.swipeDebugText}>
+            {swipeDebug}
+          </Text>
+        </View>
+      ) : null}
+      {swipePersistError ? (
+        <View style={screenStyles.swipeErrorWrap}>
+          <Text style={screenStyles.swipeErrorText}>{swipePersistError}</Text>
+        </View>
+      ) : null}
 
       {selectedPlace && (
         <View style={screenStyles.placeModalRoot} pointerEvents="box-none">
@@ -887,27 +920,12 @@ export default function SwipeScreen() {
         </View>
       )}
 
-      {matchOffer && !couponSession && (
-        <MatchAfterSwipeOverlay
-          offer={matchOffer}
-          onShowCoupon={() => {
-            setCouponSession({ offer: matchOffer, token: makeRedemptionToken(matchOffer) });
-            setMatchOffer(null);
-          }}
-          onKeepSwiping={() => setMatchOffer(null)}
-        />
-      )}
-
-      {couponSession && (
-        <SwipeCouponScreen
-          offer={couponSession.offer}
-          token={couponSession.token}
-          contextLine={`${weatherLabel} · ${locationLabel} · matched to your area`}
-          onBack={() => setCouponSession(null)}
-        />
-      )}
     </SafeAreaView>
   );
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function hasPreferences(value: unknown) {
@@ -1006,8 +1024,6 @@ function toOffer(store: NearbyStore, userLat: number, userLng: number): Offer | 
   }
   if (distanceM == null) return null;
   const emoji = categoryEmoji(store.category);
-  const idHash = store.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const discount = 8 + (idHash % 12);
   return {
     id: store.id,
     category: store.category,
@@ -1023,7 +1039,7 @@ function toOffer(store: NearbyStore, userLat: number, userLng: number): Offer | 
     rating: Number.isFinite(store.rating) ? Number(store.rating) : undefined,
     reviewCount: Number.isFinite(store.review_count) ? Number(store.review_count) : undefined,
     timeLeft: timeLeftByDistance(distanceM),
-    discount,
+    discount: 0,
     photoBg: photoBgByCategory(store.category),
     photoEmoji: emoji,
   };
@@ -1188,6 +1204,36 @@ const screenStyles = StyleSheet.create({
     fontSize: 13,
     color: Swo.ink4,
     letterSpacing: 0.2,
+  },
+  swipeErrorWrap: {
+    marginHorizontal: Spacing.s6,
+    marginBottom: Spacing.s3,
+    borderWidth: 1.5,
+    borderColor: Swo.ink,
+    borderRadius: Radius.r3,
+    backgroundColor: Swo.paper,
+    paddingHorizontal: Spacing.s3,
+    paddingVertical: Spacing.s2,
+  },
+  swipeErrorText: {
+    fontFamily: Type.bodyMedium,
+    fontSize: 12,
+    color: Swo.danger,
+  },
+  swipeDebugWrap: {
+    marginHorizontal: Spacing.s6,
+    marginBottom: Spacing.s2,
+    borderWidth: 1,
+    borderColor: Swo.borderSoft,
+    borderRadius: Radius.r3,
+    backgroundColor: Swo.shell,
+    paddingHorizontal: Spacing.s3,
+    paddingVertical: Spacing.s2,
+  },
+  swipeDebugText: {
+    fontFamily: Type.body,
+    fontSize: 11,
+    color: Swo.ink3,
   },
   onboardingScreen: {
     flex: 1,
