@@ -14,7 +14,7 @@ const NAV = [
 export function Sidebar({ merchantName }: { merchantName: string }) {
   const pathname = usePathname();
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-border-soft bg-paper px-5 py-6">
+    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col self-start overflow-y-auto border-r border-border-soft bg-paper px-5 py-6">
       <Link href="/dashboard" className="mb-8 inline-block">
         <Logo />
       </Link>
