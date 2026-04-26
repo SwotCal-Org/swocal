@@ -14,42 +14,33 @@ Customers are given coupons in the form of QR code : those are time limited, usa
 
 ## System Design
 
+```mermaid
+flowchart LR
+  U[User] --> App[Expo Mobile App<br/>React Native + expo-router]
+  App --> Auth[Supabase Auth]
+  App --> CtxFn[Edge Function: context]
+  App --> GenFn[Edge Function: generate-offers]
+  App --> RedFn[Edge Function: redeem]
+  App --> DB[(Supabase Postgres)]
+
+  CtxFn --> Weather[OpenWeather API<br/>optional]
+  GenFn --> LLM[Anthropic Claude API<br/>optional]
+  GenFn --> DB
+  RedFn --> DB
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    USER DEVICE (Expo)                   │
-│  Preferences (stored locally, never leave device)       │
-│  ↓  anonymous intent vector only                        │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              EDGE LAYER (Vercel Edge Functions)         │
-│                                                         │
-│  /api/context      /api/rank       /api/generate-offer  │
-│  ┌─────────────┐   ┌────────────┐  ┌─────────────────┐  │
-│  │ OpenWeather │   │  Scoring   │  │   Claude API    │  │
-│  │ Time/Day    │   │  Function  │  │   (structured   │  │
-│  │ Simulated   │   │            │  │    output)      │  │
-│  │ Payone feed │   │            │  │                 │  │
-│  └─────────────┘   └────────────┘  └─────────────────┘  │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                    SUPABASE                             │
-│  merchants │ offers │ generated_offers │ swipes         │
-│  users     │ redemptions                               │
-└─────────────────────────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              MERCHANT DASHBOARD (Vercel/Next.js)        │
-│  Swipe stats │ Offer rule editor │ Redemptions          │
-└─────────────────────────────────────────────────────────┘
-```
+
+Current implementation notes:
+- Backend in this repo is Supabase Edge Functions (not Vercel `/api/*` routes).
+- Implemented Edge Functions: `context`, `generate-offers`, `redeem`.
+- `generate-offers` uses Claude when `ANTHROPIC_API_KEY` is present, otherwise template fallback.
+- `context` uses OpenWeather when `OPENWEATHER_API_KEY` is present, otherwise mock fallback.
+- Merchant dashboard code is not present in this repository.
 
 **Privacy / GDPR:** User preferences live in AsyncStorage on-device. Only an abstract `intent_vector` (e.g. `{mood: "warm_comfort", budget: "mid"}`) hits the server — no PII, no raw location.
 
 ---
 
-## Supabase Schema
+## Supabase Schema (as used by code)
 
 ```sql
 create table merchants (
@@ -66,7 +57,7 @@ create table merchants (
 create table generated_offers (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid references merchants(id),
-  user_session text,
+  user_id uuid references auth.users(id),
   headline text,                      -- "Cold outside? Your cappuccino is waiting."
   subline text,                       -- "15% off · 200m away · Next 2 hours"
   discount_percent int,
@@ -81,13 +72,14 @@ create table swipes (
   id uuid primary key default gen_random_uuid(),
   offer_id uuid references generated_offers(id),
   direction text,                     -- "left" | "right"
-  session_id text,
+  user_id uuid references auth.users(id),
   created_at timestamptz default now()
 );
 
 create table redemptions (
   id uuid primary key default gen_random_uuid(),
   offer_id uuid references generated_offers(id),
+  user_id uuid references auth.users(id),
   redeemed_at timestamptz default now()
 );
 ```
@@ -180,9 +172,9 @@ Cards are pre-fetched 3 at a time; next batch generates in background. Context b
 
 ---
 
-## 3 API Endpoints
+## API Endpoints (implemented)
 
-### `GET /api/context`
+### `GET context` (Supabase function)
 
 Returns current context state. Called on app open.
 
@@ -192,37 +184,50 @@ Returns current context state. Called on app open.
   weather: { condition: "overcast", temp: 11, icon: "☁️" },
   time_of_day: "lunch",           // morning|lunch|afternoon|evening
   day_type: "weekday",
-  timestamp: "2026-04-25T11:47:00"
+  timestamp: "2026-04-25T11:47:00",
+  location: { city: "Stuttgart", lat: 48.7784, lng: 9.18 }
 }
 ```
 
 Uses OpenWeatherMap free tier. Stuttgart coords hardcoded for demo.
 
-### `POST /api/generate-offers`
+### `POST generate-offers` (Supabase function)
 
 Ranking + generation. Called with user intent.
 
 ```ts
 // Input:
 {
-  session_id: "anon-uuid",
   intent_vector: { mood: "warm_comfort", budget: "mid" },
-  context: { weather: "overcast", temp: 11, time_of_day: "lunch" }
+  context: {
+    weather: { condition: "overcast", temp: 11, icon: "☁️" },
+    time_of_day: "lunch",
+    day_type: "weekday"
+  }
 }
 
 // Output: array of 3 generated offers
-[{
-  id: "uuid",
-  merchant: { name: "Café Mayer", image_url: "...", distance_m: 200 },
-  headline: "Cold outside? Your cappuccino is waiting. ☕",
-  subline: "15% off · 200m away · Next 2 hours",
-  discount_percent: 15,
-  token: "uuid-token",
-  expires_at: "2026-04-25T13:47:00"
-}]
+{
+  offers: [{
+    id: "uuid",
+    token: "uuid-token",
+    expires_at: "2026-04-25T13:47:00",
+    headline: "Cold outside? Coffee's on.",
+    subline: "15% off · 200m away · Next 2 hours",
+    discount_percent: 15,
+    merchant: {
+      id: "uuid",
+      name: "Café Mayer",
+      category: "cafe",
+      image_url: "...",
+      distance_m: 200
+    },
+    source: "claude" // or "template"
+  }]
+}
 ```
 
-**Ranking:** `score = weather_match(0.3) + preference_match(0.4) + transaction_volume_low(0.2) + recency_novelty(0.1)` — generate for top 3 only.
+**Ranking:** weather/category affinity + mood/category affinity + transaction volume + small random tie-breaker, then top 3 are generated.
 
 **Claude prompt:**
 ```
@@ -235,11 +240,12 @@ Generate a hyper-local, emotionally resonant offer. Return JSON:
 { headline: string (max 8 words, emotional), subline: string (factual: X% off · Ym away · timing), discount_percent: number }
 ```
 
-### `POST /api/redeem`
+### `POST redeem` (Supabase function)
 
 ```ts
 // Input: { token: "uuid-token" }
-// Output: { valid: true, offer: {...}, merchant: {...} }
+// Output success: { valid: true, already_redeemed: boolean, offer: {...} }
+// Output error: { valid: false, reason: "unauthenticated" | "missing_token" | "not_found" | "wrong_user" | "expired" | "server_error" }
 // Side effect: status = 'redeemed', inserts into redemptions
 ```
 
@@ -284,11 +290,11 @@ Generate a hyper-local, emotionally resonant offer. Return JSON:
 ## Tech Stack
 
 - **Mobile:** Expo + React Native
-- **Backend/API:** Vercel Edge Functions
+- **Backend/API:** Supabase Edge Functions (Deno)
 - **Database:** Supabase (Postgres)
 - **AI:** Claude API (Anthropic)
 - **Weather:** OpenWeatherMap free tier
-- **Merchant dashboard:** Next.js on Vercel
+- **Merchant dashboard:** Not implemented in this repo
 
 ### Bootstrap commands
 
