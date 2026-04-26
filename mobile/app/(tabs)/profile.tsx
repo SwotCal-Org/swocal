@@ -17,8 +17,12 @@ import { useAuth } from '@/providers/AuthProvider';
 import { getMyProfile } from '@/services/profile';
 import { supabase } from '@/lib/supabase/client';
 
-const PREFS = ['Coffee', 'Local food', 'Cozy spots', 'Quick bites', 'Sweet stuff', 'Wine bar'];
-const ACTIVE = new Set(['Coffee', 'Cozy spots', 'Sweet stuff']);
+type ProfileIntentVector = {
+  interests?: string[];
+  vibes?: string[];
+  spend_style?: string;
+  budget?: string;
+};
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -27,23 +31,38 @@ export default function ProfileScreen() {
   const isWide = width >= 600;
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string>('Your profile');
+  const [profileTags, setProfileTags] = useState<string[]>([]);
 
   const initial = (user?.email ?? '?').charAt(0).toUpperCase();
   const memberSince = user?.created_at?.slice(0, 10);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadName() {
+    async function loadProfileData() {
       if (!user?.id) return;
-      const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+      const { data } = await supabase
+        .from('profiles')
+        .select('full_name, intent_vector')
+        .eq('id', user.id)
+        .maybeSingle();
       if (cancelled) return;
       const fallback =
         (typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name) ||
         user.email?.split('@')[0] ||
         'Your profile';
       setFullName((data?.full_name || fallback).trim());
+      const vector = (data?.intent_vector ?? {}) as ProfileIntentVector;
+      const dynamicTags = [
+        ...(Array.isArray(vector.interests) ? vector.interests : []),
+        ...(Array.isArray(vector.vibes) ? vector.vibes : []),
+        ...(vector.spend_style ? [vector.spend_style] : []),
+        ...(vector.budget ? [vector.budget] : []),
+      ]
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0);
+      setProfileTags(Array.from(new Set(dynamicTags)).slice(0, 8));
     }
-    loadName();
+    loadProfileData();
     return () => {
       cancelled = true;
     };
@@ -87,17 +106,16 @@ export default function ProfileScreen() {
           <Text style={styles.sectionEyebrow}>What sounds good</Text>
           <Text style={styles.sectionTitle}>Your three things</Text>
           <Text style={styles.sectionBody}>
-            We use this to generate offers for the moment you&rsquo;re in. Tap to toggle.
+            We use this to generate offers for the moment you&rsquo;re in.
           </Text>
           <View style={styles.prefRow}>
-            {PREFS.map((p) => (
-              <Chip
-                key={p}
-                label={p}
-                variant={ACTIVE.has(p) ? 'mustard' : 'sticker'}
-                style={{ marginBottom: Spacing.s2 }}
-              />
-            ))}
+            {profileTags.length > 0 ? (
+              profileTags.map((tag) => (
+                <Chip key={tag} label={tag} variant="mustard" style={{ marginBottom: Spacing.s2 }} />
+              ))
+            ) : (
+              <Chip label="Complete onboarding to set your preferences" variant="sticker" />
+            )}
           </View>
         </View>
 
