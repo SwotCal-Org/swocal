@@ -58,7 +58,7 @@ function RouteGuard({ children }: { children: ReactNode }) {
 
     // Merchants should not land in consumer tabs/user onboarding flow.
     if (isMerchant && !inMerchantGroup) {
-      router.replace('/merchant/onboarding');
+      router.replace('/merchant/(tabs)');
       return;
     }
 
@@ -68,7 +68,7 @@ function RouteGuard({ children }: { children: ReactNode }) {
     }
 
     if (inAuthGroup) {
-      router.replace(isMerchant ? '/merchant/onboarding' : '/(tabs)');
+      router.replace(isMerchant ? '/merchant/(tabs)' : '/(tabs)');
     }
   }, [session, loading, segments, router]);
 

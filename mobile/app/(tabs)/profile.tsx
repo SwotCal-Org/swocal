@@ -27,7 +27,6 @@ export default function ProfileScreen() {
   const isWide = width >= 600;
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [fullName, setFullName] = useState<string>('Your profile');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const initial = (user?.email ?? '?').charAt(0).toUpperCase();
   const memberSince = user?.created_at?.slice(0, 10);

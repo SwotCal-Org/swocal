@@ -3,7 +3,6 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,7 +24,6 @@ export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [role, setRole] = useState<'user' | 'merchant'>('user');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -45,8 +43,7 @@ export default function SignupScreen() {
     const { error: e, needsConfirmation, userId } = await signUp(
       email.trim(),
       password,
-      fullName.trim() || undefined,
-      role
+      fullName.trim() || undefined
     );
     setSubmitting(false);
     if (e) {
@@ -61,7 +58,7 @@ export default function SignupScreen() {
           {
             id: userId,
             full_name: fullName.trim() || null,
-            role,
+            role: 'user',
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'id' }
@@ -93,31 +90,6 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.form}>
-              <View style={styles.roleWrap}>
-                <Text style={styles.roleLabel}>Are you...</Text>
-                <View style={styles.roleSegment}>
-                  <Pressable
-                    onPress={() => setRole('user')}
-                    style={({ pressed }) => [
-                      styles.roleBtn,
-                      role === 'user' && styles.roleBtnActive,
-                      pressed && role !== 'user' && { opacity: 0.7 },
-                    ]}
-                  >
-                    <Text style={[styles.roleText, role === 'user' && styles.roleTextActive]}>User</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setRole('merchant')}
-                    style={({ pressed }) => [
-                      styles.roleBtn,
-                      role === 'merchant' && styles.roleBtnActive,
-                      pressed && role !== 'merchant' && { opacity: 0.7 },
-                    ]}
-                  >
-                    <Text style={[styles.roleText, role === 'merchant' && styles.roleTextActive]}>Merchant</Text>
-                  </Pressable>
-                </View>
-              </View>
               <Input label="Full name (optional)" value={fullName} onChangeText={setFullName} placeholder="Mia Müller" />
               <Input
                 label="Email"
@@ -195,30 +167,6 @@ const styles = StyleSheet.create({
   },
   tagline: { fontFamily: Type.body, fontSize: 15, color: Swo.ink2, lineHeight: 22 },
   form: { gap: Spacing.s4 },
-  roleWrap: { gap: Spacing.s2 },
-  roleLabel: { fontFamily: Type.bodySemi, fontSize: 13, color: Swo.ink2, letterSpacing: 0.2 },
-  roleSegment: {
-    flexDirection: 'row',
-    backgroundColor: Swo.creamDeep,
-    borderRadius: Radius.r3,
-    padding: 4,
-    gap: 4,
-  },
-  roleBtn: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: Radius.r2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleBtnActive: {
-    backgroundColor: Swo.mustard,
-    borderWidth: 1.5,
-    borderColor: Swo.ink,
-    ...Shadow.s1,
-  },
-  roleText: { fontFamily: Type.bodySemi, fontSize: 14, color: Swo.ink3 },
-  roleTextActive: { color: Swo.ink },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
   footerText: { color: Swo.ink2, fontSize: 14, fontFamily: Type.body },
   footerLink: { color: Swo.coralDeep, fontSize: 14, fontFamily: Type.bodySemi },

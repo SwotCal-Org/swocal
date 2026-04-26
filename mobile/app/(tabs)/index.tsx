@@ -99,6 +99,7 @@ function SwipeStack({
 }) {
   const [topIdx, setTopIdx] = useState(0);
   const { width: SW } = useWindowDimensions();
+  const offerCount = offers.length;
 
   // Shared values live on the UI thread — zero JS bridge cost during drag.
   const tx = useSharedValue(0);
@@ -106,7 +107,8 @@ function SwipeStack({
 
   // Called on JS thread after card flies off screen.
   function advance() {
-    setTopIdx(i => (i + 1) % offers.length);
+    if (offerCount === 0) return;
+    setTopIdx(i => (i + 1) % offerCount);
   }
 
   function handleSwipeCommit(direction: 'left' | 'right', offerId: string) {
@@ -114,6 +116,15 @@ function SwipeStack({
     if (!offer) return;
     onSwipe(direction, offer);
   }
+
+  // When live offer data refreshes, keep index in bounds.
+  useEffect(() => {
+    if (offerCount === 0) {
+      setTopIdx(0);
+      return;
+    }
+    setTopIdx((i) => (i >= offerCount ? 0 : i));
+  }, [offerCount]);
 
   // Reset the drag offset *after* the new top card has mounted. Resetting it
   // inside `advance` would snap the still-mounted old card back to center for
@@ -130,6 +141,7 @@ function SwipeStack({
       ty.value = e.translationY * 0.35;
     })
     .onEnd(e => {
+      if (offerCount === 0) return;
       const farEnough = (tx.value < 0 ? -tx.value : tx.value) > SW * 0.32;
       const fastEnough = (e.velocityX < 0 ? -e.velocityX : e.velocityX) > 700;
 
@@ -137,7 +149,9 @@ function SwipeStack({
         // Fling off screen, then advance to next card.
         const dir = tx.value > 0 ? 1 : -1;
         const direction: 'left' | 'right' = dir > 0 ? 'right' : 'left';
-        runOnJS(handleSwipeCommit)(direction, top.id);
+        if (top) {
+          runOnJS(handleSwipeCommit)(direction, top.id);
+        }
         tx.value = withTiming(dir * SW * 1.6, { duration: 320 }, () => {
           runOnJS(advance)();
         });
@@ -183,8 +197,17 @@ function SwipeStack({
     opacity: interpolate(tx.value, [-110, -30], [1, 0], Extrapolation.CLAMP),
   }));
 
-  const top = offers[topIdx];
-  const peek = offers[(topIdx + 1) % offers.length];
+  if (offerCount === 0) {
+    return <View style={swipeStyles.stack} />;
+  }
+
+  const safeTopIdx = topIdx >= offerCount ? 0 : topIdx;
+  const top = offers[safeTopIdx];
+  const peek = offers[(safeTopIdx + 1) % offerCount];
+
+  if (!top || !peek) {
+    return <View style={swipeStyles.stack} />;
+  }
 
   return (
     <View style={swipeStyles.stack}>
