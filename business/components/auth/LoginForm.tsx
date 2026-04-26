@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import { FormError } from '@/components/ui/FormError';
 import { Input } from '@/components/ui/Input';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
@@ -53,11 +54,7 @@ export function LoginForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      {error && (
-        <div className="rounded-r3 border-2 border-danger bg-coral-soft px-3 py-2 text-sm text-ink">
-          {error}
-        </div>
-      )}
+      <FormError message={error} />
       <Button type="submit" loading={loading} size="lg">
         Sign in
       </Button>

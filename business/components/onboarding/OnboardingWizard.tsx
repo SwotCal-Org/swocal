@@ -2,13 +2,16 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { FormError } from '@/components/ui/FormError';
+import { HoursEditor } from '@/components/ui/HoursEditor';
+import { ImageUpload } from '@/components/ui/ImageUpload';
 import { Input } from '@/components/ui/Input';
+import { QuietHoursSelector } from '@/components/ui/QuietHoursSelector';
 import { Select } from '@/components/ui/Select';
 import { Stepper } from '@/components/ui/Stepper';
-import { Chip } from '@/components/ui/Chip';
-import { CATEGORIES, DAYS } from '@/lib/design-tokens';
+import { CATEGORIES, TRANSACTION_VOLUME_OPTIONS } from '@/lib/design-tokens';
 import { completeOnboarding, type OnboardingInput } from '@/actions/merchant';
-import type { Hours, DayKey } from '@/types/db';
+import type { Hours } from '@/types/db';
 
 const STEPS = ['Identity', 'Location', 'Hours & contact', 'Policies'] as const;
 
@@ -29,7 +32,7 @@ export function OnboardingWizard({ defaults }: { defaults?: Partial<OnboardingIn
 
   const [name, setName] = useState(defaults?.name ?? '');
   const [category, setCategory] = useState(defaults?.category ?? CATEGORIES[0].value);
-  const [logoUrl, setLogoUrl] = useState(defaults?.logo_url ?? '');
+  const [logoUrl, setLogoUrl] = useState<string | null>(defaults?.logo_url ?? null);
 
   const [address, setAddress] = useState(defaults?.address ?? '');
   const [lat, setLat] = useState<string>(defaults?.lat?.toString() ?? '48.7784');
@@ -46,38 +49,26 @@ export function OnboardingWizard({ defaults }: { defaults?: Partial<OnboardingIn
   );
   const [quietHours, setQuietHours] = useState<string[]>(defaults?.quiet_hours ?? []);
 
-  function updateDay(key: DayKey, patch: Partial<{ open: string; close: string }> | null) {
-    setHours((prev) => ({
-      ...prev,
-      [key]: patch === null ? null : { open: '09:00', close: '18:00', ...prev[key], ...patch },
-    }));
-  }
-
-  function toggleClosed(key: DayKey) {
-    setHours((prev) => ({
-      ...prev,
-      [key]: prev[key] === null ? { open: '09:00', close: '18:00' } : null,
-    }));
-  }
-
-  function toggleQuiet(slot: string) {
-    setQuietHours((prev) => (prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]));
-  }
-
   async function handleSubmit() {
     setError(null);
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (Number.isNaN(latNum) || Number.isNaN(lngNum)) {
+      setError('Latitude and longitude must be valid numbers.');
+      return;
+    }
     setSubmitting(true);
     try {
       await completeOnboarding({
         name: name.trim(),
         category,
         address: address.trim(),
-        lat: parseFloat(lat),
-        lng: parseFloat(lng),
+        lat: latNum,
+        lng: lngNum,
         phone: phone.trim() || null,
         email: email.trim() || null,
         website: website.trim() || null,
-        logo_url: logoUrl.trim() || null,
+        logo_url: logoUrl,
         hours,
         max_discount: maxDiscount,
         quiet_hours: quietHours,
@@ -118,13 +109,14 @@ export function OnboardingWizard({ defaults }: { defaults?: Partial<OnboardingIn
               onChange={(e) => setCategory(e.target.value)}
               options={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
             />
-            <Input
-              label="Logo URL (optional)"
-              type="url"
+            <ImageUpload
+              label="Logo (optional)"
+              bucket="merchant-images"
+              subpath="logo"
+              shape="circle"
               value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              placeholder="https://…"
-              hint="Paste a link to your logo. File upload coming soon."
+              onChange={setLogoUrl}
+              hint="JPEG, PNG, or WebP. Up to 5MB."
             />
           </div>
         )}
@@ -170,46 +162,7 @@ export function OnboardingWizard({ defaults }: { defaults?: Partial<OnboardingIn
               <h2 className="font-display text-3xl">Hours & contact</h2>
               <p className="mt-1 text-sm text-ink-2">When are you open? How do customers reach you?</p>
             </header>
-            <div className="grid gap-3">
-              {DAYS.map((d) => {
-                const v = hours[d.key as DayKey];
-                const closed = v === null;
-                return (
-                  <div
-                    key={d.key}
-                    className="flex items-center gap-3 rounded-r3 border border-border-soft bg-paper px-3 py-2"
-                  >
-                    <span className="w-12 text-sm font-semibold text-ink">{d.short}</span>
-                    {closed ? (
-                      <span className="flex-1 text-sm text-ink-3">Closed</span>
-                    ) : (
-                      <div className="flex flex-1 items-center gap-2">
-                        <input
-                          type="time"
-                          value={v?.open ?? '09:00'}
-                          onChange={(e) => updateDay(d.key as DayKey, { open: e.target.value })}
-                          className="swo-input w-28 px-2 py-1 text-sm"
-                        />
-                        <span className="text-ink-3">–</span>
-                        <input
-                          type="time"
-                          value={v?.close ?? '18:00'}
-                          onChange={(e) => updateDay(d.key as DayKey, { close: e.target.value })}
-                          className="swo-input w-28 px-2 py-1 text-sm"
-                        />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => toggleClosed(d.key as DayKey)}
-                      className="text-xs font-semibold text-coral underline-offset-4 hover:underline"
-                    >
-                      {closed ? 'Open this day' : 'Close this day'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            <HoursEditor value={hours} onChange={setHours} />
             <div className="grid gap-4 md:grid-cols-2">
               <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
               <Input label="Public email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -251,25 +204,12 @@ export function OnboardingWizard({ defaults }: { defaults?: Partial<OnboardingIn
               label="Transaction volume"
               value={transactionVolume}
               onChange={(e) => setTransactionVolume(e.target.value as 'low' | 'normal' | 'high')}
-              options={[
-                { value: 'low', label: 'Low — push harder discounts to attract' },
-                { value: 'normal', label: 'Normal — balanced' },
-                { value: 'high', label: 'High — keep discounts modest' },
-              ]}
+              options={TRANSACTION_VOLUME_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
             />
             <div>
               <label className="swo-label">Quiet hours (no offers generated)</label>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {['07:00-09:00', '11:30-13:30', '17:00-19:00', '21:00-23:00'].map((slot) => (
-                  <Chip
-                    key={slot}
-                    tone="mustard"
-                    active={quietHours.includes(slot)}
-                    onClick={() => toggleQuiet(slot)}
-                  >
-                    {slot}
-                  </Chip>
-                ))}
+              <div className="mt-2">
+                <QuietHoursSelector value={quietHours} onChange={setQuietHours} />
               </div>
               <p className="mt-2 text-xs text-ink-3">
                 Tap to mute. Selected slots won't generate offers (e.g. peak service times).
@@ -278,11 +218,9 @@ export function OnboardingWizard({ defaults }: { defaults?: Partial<OnboardingIn
           </div>
         )}
 
-        {error && (
-          <div className="mt-5 rounded-r3 border-2 border-danger bg-coral-soft px-3 py-2 text-sm text-ink">
-            {error}
-          </div>
-        )}
+        <div className="mt-5">
+          <FormError message={error} />
+        </div>
 
         <div className="mt-8 flex items-center justify-between">
           <Button

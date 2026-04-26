@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -6,10 +7,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AvatarUpload } from '@/components/avatar-upload';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Radius, Shadow, Spacing, Swo, Type } from '@/constants/Colors';
 import { useAuth } from '@/providers/AuthProvider';
+import { getMyProfile } from '@/services/profile';
 
 const PREFS = ['Coffee', 'Local food', 'Cozy spots', 'Quick bites', 'Sweet stuff', 'Wine bar'];
 const ACTIVE = new Set(['Coffee', 'Cozy spots', 'Sweet stuff']);
@@ -18,6 +21,15 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getMyProfile()
+      .then((p) => { if (mounted) setAvatarUrl(p?.avatar_url ?? null); })
+      .catch(() => { /* ignore — profile may not yet exist */ });
+    return () => { mounted = false; };
+  }, [user?.id]);
 
   const initial = (user?.email ?? '?').charAt(0).toUpperCase();
   const memberSince = user?.created_at?.slice(0, 10);
@@ -26,9 +38,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView contentContainerStyle={[styles.scroll, isWide && styles.scrollWide]}>
         <View style={styles.heroCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
+          <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} fallback={initial} />
           <Text style={styles.email} numberOfLines={1}>
             {user?.email}
           </Text>
@@ -101,19 +111,6 @@ const styles = StyleSheet.create({
     gap: Spacing.s2,
     ...Shadow.s2,
   },
-  avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: Swo.mustard,
-    borderWidth: 2,
-    borderColor: Swo.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.s2,
-    ...Shadow.stickerSoft,
-  },
-  avatarText: { color: Swo.ink, fontSize: 36, fontFamily: Type.displayBlack },
   email: {
     fontFamily: Type.displaySemi,
     fontSize: 18,

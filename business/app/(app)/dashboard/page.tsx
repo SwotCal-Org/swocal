@@ -10,25 +10,22 @@ export default async function DashboardPage() {
   const merchant = await requireMerchant();
   const supabase = await createSupabaseServerClient();
 
-  // The dashboard tells the owner the value Swocal is generating *for them*:
-  //   1. customers driven  — distinct people who used a Swocal coupon at this shop
-  //   2. sales driven      — total $ those redemptions represent
-  //   3. coupons given out — how many coupons the AI has issued for this shop
-  //
-  // We pull from two tables because Swocal has two coupon shapes:
-  //   * AI-issued one-shot offers (generated_offers + redemptions)
-  //   * Static coupon templates   (coupon_template_redemptions, legacy)
-  // Both contribute to "customers driven" and "sales driven".
-
+  // Two coupon shapes contribute to customer/sales counts: AI-issued one-shot
+  // offers (generated_offers + redemptions) and the legacy static templates
+  // (coupon_template_redemptions). The 1000-row limit is a safety net so a
+  // shop with millions of redemptions doesn't blow up the page; revisit with a
+  // Postgres aggregate if any merchant approaches that scale.
   const [templateRedemptionsRes, offerRedemptionsRes, offersGivenRes] = await Promise.all([
     supabase
       .from('coupon_template_redemptions')
       .select('user_id, amount_cents, coupon_templates!inner(merchant_id)')
-      .eq('coupon_templates.merchant_id', merchant.id),
+      .eq('coupon_templates.merchant_id', merchant.id)
+      .limit(1000),
     supabase
       .from('redemptions')
       .select('user_id, generated_offers!inner(merchant_id, discount_percent)')
-      .eq('generated_offers.merchant_id', merchant.id),
+      .eq('generated_offers.merchant_id', merchant.id)
+      .limit(1000),
     supabase
       .from('generated_offers')
       .select('id', { count: 'exact', head: true })
@@ -42,9 +39,8 @@ export default async function DashboardPage() {
   for (const r of templateRows) if (r.user_id) distinctUsers.add(r.user_id);
   for (const r of offerRows) if (r.user_id) distinctUsers.add(r.user_id);
 
-  // Sales driven = sum of recorded amounts on coupon redemptions. AI-offer
-  // redemptions don't carry a $ amount in the schema yet, so they only count
-  // toward customer reach, not revenue.
+  // AI-offer redemptions don't carry a $ amount in the schema yet, so revenue
+  // only counts the coupon-template redemptions for now.
   const salesCents = templateRows.reduce((sum, r) => sum + (r.amount_cents ?? 0), 0);
 
   const couponsGivenOut = offersGivenRes.count ?? 0;

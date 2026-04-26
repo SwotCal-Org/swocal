@@ -1,12 +1,16 @@
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Merchant } from '@/types/db';
 
-export async function getUser() {
+// React.cache() dedupes calls within a single request — layout + page can both
+// call requireMerchant() and only one DB query fires.
+
+export const getUser = cache(async () => {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getUser();
   return data.user;
-}
+});
 
 export async function requireUser() {
   const user = await getUser();
@@ -14,29 +18,21 @@ export async function requireUser() {
   return user;
 }
 
-// Resolve the merchant row owned by the current user, if any. Used by route
-// guards to decide between onboarding and dashboard.
-export async function getMyMerchant(): Promise<Merchant | null> {
+export const getMyMerchant = cache(async (): Promise<Merchant | null> => {
+  const user = await getUser();
+  if (!user) return null;
   const supabase = await createSupabaseServerClient();
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return null;
   const { data } = await supabase
-    .from('merchants')
-    .select('*')
-    .eq('owner_id', userData.user.id)
-    .maybeSingle();
-  return (data as Merchant | null) ?? null;
-}
-
-export async function requireMerchant(): Promise<Merchant> {
-  const user = await requireUser();
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
     .from('merchants')
     .select('*')
     .eq('owner_id', user.id)
     .maybeSingle();
-  if (error) throw error;
-  if (!data || !data.onboarded_at) redirect('/onboarding');
-  return data as Merchant;
+  return (data as Merchant | null) ?? null;
+});
+
+export async function requireMerchant(): Promise<Merchant> {
+  await requireUser();
+  const merchant = await getMyMerchant();
+  if (!merchant || !merchant.onboarded_at) redirect('/onboarding');
+  return merchant;
 }

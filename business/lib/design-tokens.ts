@@ -54,3 +54,35 @@ export const DAYS = [
   { value: 6, short: 'Sat', long: 'Saturday', key: 'sat' },
   { value: 0, short: 'Sun', long: 'Sunday', key: 'sun' },
 ] as const;
+
+import type { TimeOfDay, TransactionVolume, WeatherCondition } from '@/types/db';
+
+export const WEATHER_OPTIONS: ReadonlyArray<{ value: WeatherCondition; label: string }> = [
+  { value: 'clear', label: 'Clear ☀' },
+  { value: 'clouds', label: 'Clouds ☁' },
+  { value: 'rain', label: 'Rain ☂' },
+  { value: 'snow', label: 'Snow ❄' },
+  { value: 'thunderstorm', label: 'Storm ⚡' },
+  { value: 'mist', label: 'Mist' },
+  { value: 'drizzle', label: 'Drizzle' },
+];
+
+export const TIME_OF_DAY_OPTIONS: ReadonlyArray<{ value: TimeOfDay; label: string }> = [
+  { value: 'morning', label: 'Morning' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'afternoon', label: 'Afternoon' },
+  { value: 'evening', label: 'Evening' },
+];
+
+export const QUIET_HOURS_SLOTS: ReadonlyArray<string> = [
+  '07:00-09:00',
+  '11:30-13:30',
+  '17:00-19:00',
+  '21:00-23:00',
+];
+
+export const TRANSACTION_VOLUME_OPTIONS: ReadonlyArray<{ value: TransactionVolume; label: string }> = [
+  { value: 'low', label: 'Low — push harder discounts' },
+  { value: 'normal', label: 'Normal — balanced' },
+  { value: 'high', label: 'High — modest discounts' },
+];

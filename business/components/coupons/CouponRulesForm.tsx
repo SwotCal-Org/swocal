@@ -5,26 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
+import { FormError } from '@/components/ui/FormError';
 import { Textarea } from '@/components/ui/Textarea';
 import { updateCouponRules } from '@/actions/merchant';
+import { TIME_OF_DAY_OPTIONS, WEATHER_OPTIONS } from '@/lib/design-tokens';
 import type { CouponAiRules, TimeOfDay, WeatherCondition } from '@/types/db';
-
-const WEATHER: { value: WeatherCondition; label: string }[] = [
-  { value: 'clear', label: 'Clear ☀' },
-  { value: 'clouds', label: 'Clouds ☁' },
-  { value: 'rain', label: 'Rain ☂' },
-  { value: 'snow', label: 'Snow ❄' },
-  { value: 'thunderstorm', label: 'Storm ⚡' },
-  { value: 'mist', label: 'Mist' },
-  { value: 'drizzle', label: 'Drizzle' },
-];
-
-const TIMES: { value: TimeOfDay; label: string }[] = [
-  { value: 'morning', label: 'Morning' },
-  { value: 'lunch', label: 'Lunch' },
-  { value: 'afternoon', label: 'Afternoon' },
-  { value: 'evening', label: 'Evening' },
-];
 
 const PROMPT_PLACEHOLDER =
   'e.g. Give out coffee coupons when it\'s cold and raining, especially on quiet weekday mornings. ' +
@@ -137,7 +122,7 @@ export function CouponRulesForm({ initial }: { initial: CouponAiRules }) {
         <div className="mt-4">
           <p className="swo-label">Only give out coupons when it's…</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {WEATHER.map((w) => (
+            {WEATHER_OPTIONS.map((w) => (
               <Chip
                 key={w.value}
                 tone="sky"
@@ -152,7 +137,7 @@ export function CouponRulesForm({ initial }: { initial: CouponAiRules }) {
         <div className="mt-5">
           <p className="swo-label">Never give out coupons when it's…</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {WEATHER.map((w) => (
+            {WEATHER_OPTIONS.map((w) => (
               <Chip
                 key={w.value}
                 tone="coral"
@@ -199,7 +184,7 @@ export function CouponRulesForm({ initial }: { initial: CouponAiRules }) {
           Restrict coupons to specific parts of the day. Leave none selected for any time.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {TIMES.map((t) => (
+          {TIME_OF_DAY_OPTIONS.map((t) => (
             <Chip
               key={t.value}
               tone="mustard"
@@ -221,11 +206,7 @@ export function CouponRulesForm({ initial }: { initial: CouponAiRules }) {
         </label>
       </Card>
 
-      {error && (
-        <div className="rounded-r3 border-2 border-danger bg-coral-soft px-4 py-3 text-sm text-ink">
-          {error}
-        </div>
-      )}
+      <FormError message={error} />
 
       <div className="flex items-center justify-end gap-3">
         {saved && <span className="text-sm font-semibold text-mint-deep">Saved ✓</span>}

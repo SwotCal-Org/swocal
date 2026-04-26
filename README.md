@@ -13,93 +13,100 @@ Coupon rates are limited, on both sides : customers only get a set numbers of co
 ## System Design
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    USER DEVICE (Expo)                   │
-│  Preferences (stored locally, never leave device)       │
-│  ↓  anonymous intent vector only                        │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              EDGE LAYER (Vercel Edge Functions)         │
-│                                                         │
-│  /api/context      /api/rank       /api/generate-offer  │
-│  ┌─────────────┐   ┌────────────┐  ┌─────────────────┐  │
-│  │ OpenWeather │   │  Scoring   │  │   Claude API    │  │
-│  │ Time/Day    │   │  Function  │  │   (structured   │  │
-│  │ Simulated   │   │            │  │    output)      │  │
-│  │ Payone feed │   │            │  │                 │  │
-│  └─────────────┘   └────────────┘  └─────────────────┘  │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│                    SUPABASE                             │
-│  merchants │ offers │ generated_offers │ swipes         │
-│  users     │ redemptions                               │
-└─────────────────────────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────┐
-│              MERCHANT DASHBOARD (Vercel/Next.js)        │
-│  Swipe stats │ Offer rule editor │ Redemptions          │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────┐         ┌──────────────────────────┐
+│  CONSUMER  (mobile/)     │         │  MERCHANT  (business/)   │
+│  Expo / React Native     │         │  Next.js 15 App Router   │
+│  swipe · coupon · profile│         │  dashboard · coupons ·   │
+│                          │         │  redemptions · settings  │
+└────────────┬─────────────┘         └────────────┬─────────────┘
+             │   anon key + user JWT              │   anon key + user JWT
+             ▼                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        SUPABASE EDGE                            │
+│                                                                 │
+│   functions/context     functions/generate-offers   functions/  │
+│   (weather + time)      (rank + Claude + insert)    redeem      │
+└─────────────────────────────────┬───────────────────────────────┘
+                                  │  RLS-gated reads/writes
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       SUPABASE POSTGRES                         │
+│  profiles · merchants · generated_offers · swipes ·             │
+│  redemptions · coupon_templates · coupon_template_redemptions   │
+│                                                                 │
+│  Schema lives in supabase/migrations/ — single source of truth  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Privacy / GDPR:** User preferences live in AsyncStorage on-device. Only an abstract `intent_vector` (e.g. `{mood: "warm_comfort", budget: "mid"}`) hits the server — no PII, no raw location.
 
+## Repo layout
+
+```
+swocal/
+├── mobile/                  Expo consumer app — swipe deck + coupons
+├── business/                Next.js merchant dashboard
+├── supabase/
+│   ├── config.toml          Supabase CLI config (local dev ports, auth)
+│   ├── seed.sql             Idempotent demo data
+│   ├── migrations/          Versioned schema — apply in filename order
+│   └── functions/           Deno edge functions + _shared/cors.ts
+└── Swocal Design System/    Visual + verbal brand reference
+```
+
+Each folder has its own `README.md`. Start there.
+
+## Get started
+
+```bash
+# 1. Database — link, push migrations, seed
+supabase link --project-ref cwxflidwpgsqlkmcbxcn
+supabase db push
+supabase db reset                # local only — nukes & re-applies + seed
+
+# 2. Mobile (consumer)
+cd mobile && npm install && npm run ios
+
+# 3. Business (merchant)
+cd business && npm install && npm run dev      # http://localhost:3001
+```
+
+Env files: `mobile/.env`, `business/.env.local`. See `.env.example` files in each.
+
+## Database flow — the rule
+
+**Schema changes happen in `supabase/migrations/`, never in the dashboard.**
+Add a new `YYYYMMDDHHMMSS_what.sql` file, push, and regenerate types:
+
+```bash
+supabase migration new add_payment_methods
+# edit the new file …
+supabase db push
+supabase gen types typescript --project-id cwxflidwpgsqlkmcbxcn --schema public \
+  > mobile/lib/supabase/types.ts
+# also update business/types/db.ts by hand (see business/types/README.md)
+```
+
+RLS is the only thing standing between an authenticated user and someone
+else's row. Both apps use the anon key + the user's JWT — never the service
+role from client code. Policy reference: `supabase/migrations/README.md`.
+
 ---
 
-## Supabase Schema
+## Supabase schema
 
-```sql
-create table merchants (
-  id uuid primary key default gen_random_uuid(),
-  name text,
-  category text,                      -- "cafe" | "bakery" | "restaurant"
-  address text,
-  lat float, lng float,
-  image_url text,                     -- Unsplash URL by category
-  transaction_volume text default 'normal', -- "low"|"normal"|"high" (simulated Payone)
-  rules jsonb                         -- {"max_discount": 20, "quiet_hours": ["10-12","14-16"]}
-);
+The schema lives in [`supabase/migrations/`](./supabase/migrations/) — one
+`.sql` file per concern, applied in filename order:
 
-create table generated_offers (
-  id uuid primary key default gen_random_uuid(),
-  merchant_id uuid references merchants(id),
-  user_session text,
-  headline text,                      -- "Cold outside? Your cappuccino is waiting."
-  subline text,                       -- "15% off · 200m away · Next 2 hours"
-  discount_percent int,
-  context_signals jsonb,              -- {"weather":"overcast","temp":11,"time":"lunch"}
-  token text unique default gen_random_uuid()::text,
-  status text default 'active',       -- active | redeemed | expired
-  expires_at timestamptz default now() + interval '2 hours',
-  created_at timestamptz default now()
-);
+| File                          | Concern                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| `..._initial_schema.sql`      | All tables (`profiles`, `merchants`, `generated_offers`, `swipes`, `redemptions`, `coupon_templates`, `coupon_template_redemptions`) |
+| `..._indexes.sql`             | Indexes targeted at the actual query shapes                  |
+| `..._rls_policies.sql`        | Row-Level Security — see policy table in `supabase/migrations/README.md` |
+| `..._triggers.sql`            | `handle_new_user` (auto-create profile) + `set_updated_at`   |
 
-create table swipes (
-  id uuid primary key default gen_random_uuid(),
-  offer_id uuid references generated_offers(id),
-  direction text,                     -- "left" | "right"
-  session_id text,
-  created_at timestamptz default now()
-);
-
-create table redemptions (
-  id uuid primary key default gen_random_uuid(),
-  offer_id uuid references generated_offers(id),
-  redeemed_at timestamptz default now()
-);
-```
-
-### Seed Data
-
-```sql
-insert into merchants (name, category, address, lat, lng, image_url, transaction_volume, rules) values
-('Café Mayer', 'cafe', 'Marktplatz 4, Stuttgart', 48.7784, 9.1800, 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400', 'low', '{"max_discount": 20, "quiet_hours": ["10:00-12:00","14:00-16:00"]}'),
-('Bäckerei Weber', 'bakery', 'Königstraße 12, Stuttgart', 48.7786, 9.1795, 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400', 'low', '{"max_discount": 15, "quiet_hours": ["13:00-15:00"]}'),
-('Thai Kitchen', 'restaurant', 'Gerberstraße 5, Stuttgart', 48.7775, 9.1810, 'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=400', 'low', '{"max_discount": 25, "quiet_hours": ["11:00-13:00"]}'),
-('Weinbar Schmidt', 'bar', 'Calwer Straße 21, Stuttgart', 48.7780, 9.1790, 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400', 'normal', '{"max_discount": 20, "quiet_hours": ["17:00-19:00"]}'),
-('Süßes Eck', 'dessert', 'Schlossplatz 8, Stuttgart', 48.7788, 9.1805, 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=400', 'low', '{"max_discount": 30, "quiet_hours": ["14:00-17:00"]}');
-```
+Demo data: [`supabase/seed.sql`](./supabase/seed.sql) — 5 Stuttgart merchants,
+idempotent (only seeds when the table is empty).
 
 ---
 

@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider, type Theme } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, type ReactNode } from 'react';
@@ -21,7 +21,20 @@ import { Caveat_700Bold } from '@expo-google-fonts/caveat';
 
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { Swo } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+
+// Single warm-cream theme — Swocal has no dark mode by design.
+const SwocalNavTheme: Theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: Swo.cream,
+    card: Swo.paper,
+    text: Swo.ink,
+    border: Swo.borderSoft,
+    primary: Swo.mustard,
+    notification: Swo.coral,
+  },
+};
 
 function RouteGuard({ children }: { children: ReactNode }) {
   const { session, loading } = useAuth();
@@ -50,7 +63,6 @@ function RouteGuard({ children }: { children: ReactNode }) {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [fontsLoaded] = useFonts({
     Fraunces_600SemiBold,
     Fraunces_700Bold,
@@ -74,7 +86,7 @@ export default function RootLayout() {
     // GestureHandlerRootView must be the outermost view — required for new arch (Fabric)
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={SwocalNavTheme}>
           <RouteGuard>
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Swo.cream } }}>
               <Stack.Screen name="(auth)" />

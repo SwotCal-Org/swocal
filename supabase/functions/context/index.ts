@@ -1,12 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { jsonResponse, preflight } from "../_shared/cors.ts";
 
 const STUTTGART = { lat: 48.7784, lng: 9.1800 };
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
 
 function timeOfDay(hour: number): "morning" | "lunch" | "afternoon" | "evening" {
   if (hour < 11) return "morning";
@@ -46,20 +41,17 @@ async function fetchWeather(): Promise<{ condition: string; temp: number; icon: 
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const pf = preflight(req);
+  if (pf) return pf;
+
   const now = new Date();
   const day = now.getDay();
   const weather = await fetchWeather();
-  const body = {
+  return jsonResponse({
     weather,
     time_of_day: timeOfDay(now.getHours()),
     day_type: day === 0 || day === 6 ? "weekend" : "weekday",
     timestamp: now.toISOString(),
     location: { city: "Stuttgart", lat: STUTTGART.lat, lng: STUTTGART.lng },
-  };
-  return new Response(JSON.stringify(body), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
