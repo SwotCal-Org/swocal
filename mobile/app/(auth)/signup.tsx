@@ -24,12 +24,10 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async () => {
     setError(null);
-    setInfo(null);
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
       return;
@@ -39,15 +37,11 @@ export default function SignupScreen() {
       return;
     }
     setSubmitting(true);
-    const { error: e, needsConfirmation } = await signUp(email.trim(), password, fullName.trim() || undefined);
+    const { error: e } = await signUp(email.trim(), password, fullName.trim() || undefined);
     setSubmitting(false);
-    if (e) {
-      setError(e);
-      return;
-    }
-    if (needsConfirmation) {
-      setInfo('Check your email to confirm your account.');
-    }
+    if (e) setError(e);
+    // On success the AuthProvider session updates and the route guard in
+    // app/_layout.tsx redirects into (tabs) automatically.
   };
 
   return (
@@ -97,7 +91,6 @@ export default function SignupScreen() {
                 onChangeText={setConfirm}
               />
               {error ? <Text style={styles.error}>{error}</Text> : null}
-              {info ? <Text style={styles.info}>{info}</Text> : null}
               <Button title="Create account" onPress={onSubmit} loading={submitting} />
             </View>
 
@@ -150,6 +143,5 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' },
   footerText: { color: Swo.ink2, fontSize: 14, fontFamily: Type.body },
   footerLink: { color: Swo.coralDeep, fontSize: 14, fontFamily: Type.bodySemi },
-  info: { color: Swo.mintDeep, fontSize: 13, fontFamily: Type.bodyMedium },
   error: { color: Swo.danger, fontSize: 13, fontFamily: Type.bodyMedium },
 });

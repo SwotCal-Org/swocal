@@ -1,0 +1,115 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-mustard: #f2b23a;
+  --color-mustard-deep: #c98f1c;
+  --color-mustard-soft: #fbe5a6;
+
+  --color-coral: #e36a4d;
+  --color-coral-deep: #c04a30;
+  --color-coral-soft: #f7cfc0;
+
+  --color-mint: #8db36b;
+  --color-mint-deep: #5f8842;
+  --color-mint-soft: #e1ebc9;
+
+  --color-plum: #a14e5e;
+  --color-plum-soft: #f1d7da;
+
+  --color-sky: #6e9c9b;
+  --color-sky-soft: #d9e5e2;
+
+  --color-cream: #fbf5ea;
+  --color-cream-deep: #f2e9d6;
+  --color-paper: #fffefb;
+  --color-shell: #f7ecd9;
+
+  --color-ink: #2a1f1a;
+  --color-ink-2: #5c4a3f;
+  --color-ink-3: #8b7969;
+  --color-ink-4: #c9b9a6;
+
+  --color-danger: #b94a35;
+  --color-border-soft: #e8dcc6;
+
+  --font-display: var(--font-fraunces), 'Fraunces', serif;
+  --font-body: var(--font-dm-sans), 'DM Sans', sans-serif;
+  --font-hand: var(--font-caveat), 'Caveat', cursive;
+
+  --shadow-warm-1: 0 2px 6px rgba(70, 40, 20, 0.08);
+  --shadow-warm-2: 0 4px 14px rgba(70, 40, 20, 0.1);
+  --shadow-warm-3: 0 12px 28px rgba(70, 40, 20, 0.14);
+  --shadow-sticker: 3px 4px 0 #2a1f1a;
+  --shadow-sticker-soft: 2px 3px 0 rgba(42, 31, 26, 0.18);
+
+  --radius-r1: 4px;
+  --radius-r2: 8px;
+  --radius-r3: 12px;
+  --radius-r4: 18px;
+  --radius-r5: 24px;
+  --radius-r6: 32px;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    font-family: var(--font-display);
+    color: var(--color-ink);
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: var(--color-mustard-soft);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  .swo-card {
+    background: var(--color-paper);
+    border: 1.5px solid var(--color-border-soft);
+    border-radius: var(--radius-r4);
+    box-shadow: var(--shadow-warm-1);
+  }
+  .swo-sticker {
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-r3);
+    box-shadow: var(--shadow-sticker);
+  }
+  .swo-input {
+    background: var(--color-paper);
+    border: 1.5px solid var(--color-border-soft);
+    border-radius: var(--radius-r3);
+    padding: 12px 14px;
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    width: 100%;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .swo-input:focus {
+    outline: none;
+    border-color: var(--color-coral);
+    box-shadow: 0 0 0 3px var(--color-coral-soft);
+  }
+  .swo-input::placeholder {
+    color: var(--color-ink-3);
+  }
+  .swo-label {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--color-ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}

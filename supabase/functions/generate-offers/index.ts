@@ -1,14 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import Anthropic from "npm:@anthropic-ai/sdk@0.32.1";
+import { jsonResponse, preflight } from "../_shared/cors.ts";
 
 const STUTTGART = { lat: 48.7784, lng: 9.1800 };
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 type IntentVector = { mood?: string; budget?: string };
 type ContextSignals = { weather: { condition: string; temp: number; icon: string }; time_of_day: string; day_type: string };
@@ -136,9 +131,8 @@ async function generateWithClaude(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const pf = preflight(req);
+  if (pf) return pf;
 
   try {
     const auth = req.headers.get("Authorization") ?? "";
@@ -150,10 +144,7 @@ Deno.serve(async (req) => {
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
     if (userErr || !userData.user) {
-      return new Response(JSON.stringify({ error: "unauthenticated" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "unauthenticated" }, 401);
     }
     const userId = userData.user.id;
 
@@ -171,9 +162,7 @@ Deno.serve(async (req) => {
       .returns<Merchant[]>();
     if (mErr) throw mErr;
     if (!merchants || merchants.length === 0) {
-      return new Response(JSON.stringify({ offers: [] }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ offers: [] });
     }
 
     const ranked = merchants
@@ -233,14 +222,9 @@ Deno.serve(async (req) => {
       source: claude ? "claude" : "template",
     }));
 
-    return new Response(JSON.stringify({ offers }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ offers });
   } catch (err) {
     console.error("generate-offers error:", err);
-    return new Response(JSON.stringify({ error: String((err as Error).message ?? err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: String((err as Error).message ?? err) }, 500);
   }
 });
